@@ -1,589 +1,451 @@
-// server.js - File Upload Service Mirip Catbox
-// Support untuk Vercel (menggunakan API eksternal untuk penyimpanan)
-// Menggunakan tmpfiles.org sebagai service utama
+// server.js - File Upload Service dengan Cloudinary
+// Menggunakan Cloudinary untuk penyimpanan file
 
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
-const axios = require('axios');
-const FormData = require('form-data');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// ==================== CLOUDINARY CONFIGURATION ====================
+cloudinary.config({
+  cloud_name: 'dwbi7zfjl', // Biasanya format: dwbi7zfjl atau sesuai akun
+  api_key: '951531676243719',
+  api_secret: '951531676243719',
+  secure: true
+});
+
+console.log('✅ Cloudinary configured');
+
+// ==================== MIDDLEWARE ====================
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Serve static files from public directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Konfigurasi multer untuk upload sementara
-const storage = multer.memoryStorage();
-const upload = multer({ 
-    storage: storage,
-    limits: {
-        fileSize: 100 * 1024 * 1024 // Limit 100MB
+// ==================== MULTER STORAGE FOR CLOUDINARY ====================
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'mycatbox', // Folder di Cloudinary
+    resource_type: 'auto', // Auto-detect file type (image, video, raw, etc)
+    public_id: (req, file) => {
+      // Generate unique filename
+      const uniqueSuffix = crypto.randomBytes(8).toString('hex');
+      const fileName = file.originalname.split('.')[0];
+      return `${fileName}-${uniqueSuffix}`;
+    },
+    format: (req, file) => {
+      // Get file extension
+      const ext = file.originalname.split('.').pop();
+      return ext;
     }
+  }
 });
 
-// API Keys untuk berbagai service penyimpanan
-const STORAGE_SERVICES = {
-    TMPFILES: {
-        enabled: true,
-        uploadUrl: 'https://tmpfiles.org/api/v1/upload',
-        maxSize: 100 * 1024 * 1024, // 100MB
-        description: 'File otomatis dihapus setelah 60 menit'
-    },
-    GOFILE: {
-        enabled: true,
-        serverUrl: 'https://api.gofile.io/getServer',
-        uploadUrl: 'https://{server}.gofile.io/uploadFile'
-    },
-    TEMP_NINJA: {
-        enabled: true,
-        uploadUrl: 'https://tmp.ninja/api.php?d=upload',
-        maxSize: 500 * 1024 * 1024 // 500MB
-    }
+// Filter file (opsional)
+const fileFilter = (req, file, cb) => {
+  // Boleh upload semua jenis file
+  cb(null, true);
 };
 
-// Database sederhana untuk menyimpan metadata file
+const upload = multer({ 
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 100 * 1024 * 1024 // 100MB
+  }
+});
+
+// ==================== DATABASE SEDERHANA ====================
 let fileDatabase = [];
 
-// Fungsi untuk generate ID unik
-function generateUniqueId() {
-    return crypto.randomBytes(8).toString('hex');
-}
-
-// ==================== TMPFILES.ORG SERVICE ====================
-async function uploadToTmpFiles(fileBuffer, fileName, mimeType) {
-    try {
-        console.log('📤 Mencoba upload ke tmpfiles.org...');
-        
-        const formData = new FormData();
-        formData.append('file', fileBuffer, {
-            filename: fileName,
-            contentType: mimeType
-        });
-
-        const response = await axios.post('https://tmpfiles.org/api/v1/upload', formData, {
-            headers: {
-                ...formData.getHeaders()
-            },
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity
-        });
-
-        console.log('✅ Response tmpfiles.org:', response.data);
-
-        // Response dari tmpfiles.org:
-        // {
-        //   "success": true,
-        //   "data": {
-        //     "url": "https://tmpfiles.org/123456/filename.jpg"
-        //   }
-        // }
-
-        if (response.data && response.data.success) {
-            // Generate ID lokal untuk file
-            const fileId = generateUniqueId();
-            
-            // Ambil URL dari response
-            let fileUrl = response.data.data.url;
-            
-            // tmpfiles.org juga menyediakan direct download URL
-            // Format: https://tmpfiles.org/dl/123456/filename.jpg
-            const directUrl = fileUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
-            
-            // Set expiry 60 menit dari sekarang
-            const expiry = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-            
-            console.log('✅ Upload berhasil ke tmpfiles.org:', fileUrl);
-            
-            return {
-                success: true,
-                url: fileUrl,
-                directUrl: directUrl,
-                fileId: fileId,
-                service: 'tmpfiles.org',
-                expiry: expiry,
-                message: 'File akan otomatis dihapus setelah 60 menit'
-            };
-        } else {
-            throw new Error(response.data?.error || 'Upload gagal ke tmpfiles.org');
-        }
-    } catch (error) {
-        console.error('❌ Error uploading to tmpfiles.org:', error.response?.data || error.message);
-        return {
-            success: false,
-            error: error.response?.data?.error || error.message
-        };
-    }
-}
-
-// ==================== GOFILE SERVICE ====================
-async function getGoFileServer() {
-    try {
-        const response = await axios.get('https://api.gofile.io/getServer');
-        return response.data.data.server;
-    } catch (error) {
-        console.error('Error getting GoFile server:', error);
-        return null;
-    }
-}
-
-async function uploadToGoFile(fileBuffer, fileName, mimeType) {
-    try {
-        console.log('📤 Mencoba upload ke GoFile...');
-        
-        // Dapatkan server yang tersedia
-        const server = await getGoFileServer();
-        if (!server) {
-            throw new Error('Tidak dapat menemukan server GoFile');
-        }
-
-        const uploadUrl = `https://${server}.gofile.io/uploadFile`;
-        
-        const formData = new FormData();
-        formData.append('file', fileBuffer, {
-            filename: fileName,
-            contentType: mimeType
-        });
-
-        const response = await axios.post(uploadUrl, formData, {
-            headers: {
-                ...formData.getHeaders()
-            },
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity
-        });
-
-        if (response.data.status === 'ok') {
-            // Generate ID lokal untuk file
-            const fileId = generateUniqueId();
-            
-            const fileUrl = `https://${server}.gofile.io/download/${response.data.data.fileId}/${fileName}`;
-            
-            console.log('✅ Upload berhasil ke GoFile:', fileUrl);
-            
-            return {
-                success: true,
-                url: fileUrl,
-                fileId: fileId,
-                service: 'gofile',
-                directUrl: fileUrl
-            };
-        } else {
-            throw new Error(response.data.message || 'Upload gagal');
-        }
-    } catch (error) {
-        console.error('❌ Error uploading to GoFile:', error);
-        return {
-            success: false,
-            error: error.message
-        };
-    }
-}
-
-// ==================== TEMP.NINJA SERVICE ====================
-async function uploadToTempNinja(fileBuffer, fileName, mimeType) {
-    try {
-        console.log('📤 Mencoba upload ke tmp.ninja...');
-        
-        const formData = new FormData();
-        formData.append('file', fileBuffer, {
-            filename: fileName,
-            contentType: mimeType
-        });
-
-        const response = await axios.post('https://tmp.ninja/api.php?d=upload', formData, {
-            headers: {
-                ...formData.getHeaders()
-            },
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity
-        });
-
-        // Parse response dari tmp.ninja
-        let fileUrl = response.data.file?.url?.full || response.data.url || response.data;
-        
-        // Generate ID lokal untuk file
-        const fileId = generateUniqueId();
-        
-        console.log('✅ Upload berhasil ke tmp.ninja:', fileUrl);
-
-        return {
-            success: true,
-            url: fileUrl,
-            fileId: fileId,
-            service: 'tmp.ninja',
-            directUrl: fileUrl
-        };
-    } catch (error) {
-        console.error('❌ Error uploading to tmp.ninja:', error);
-        return {
-            success: false,
-            error: error.message
-        };
-    }
+// Fungsi generate ID lokal
+function generateLocalId() {
+  return crypto.randomBytes(8).toString('hex');
 }
 
 // ==================== UPLOAD ENDPOINT ====================
 app.post('/api/upload', upload.single('file'), async (req, res) => {
-    console.log('📢 Upload endpoint dipanggil');
-    
-    try {
-        if (!req.file) {
-            console.log('❌ Tidak ada file');
-            return res.status(400).json({
-                success: false,
-                error: 'Tidak ada file yang diupload'
-            });
-        }
-
-        const file = req.file;
-        const fileName = file.originalname;
-        const fileBuffer = file.buffer;
-        const fileSize = file.size;
-        const mimeType = file.mimetype;
-
-        console.log(`📁 Menerima file: ${fileName}, size: ${fileSize} bytes`);
-
-        // Validasi ukuran file
-        if (fileSize > 100 * 1024 * 1024) {
-            return res.status(400).json({
-                success: false,
-                error: 'Ukuran file terlalu besar. Maksimal 100MB'
-            });
-        }
-
-        let uploadResult = null;
-        let errors = [];
-
-        // PRIORITAS 1: Coba upload ke tmpfiles.org (paling stabil)
-        if (STORAGE_SERVICES.TMPFILES.enabled) {
-            uploadResult = await uploadToTmpFiles(fileBuffer, fileName, mimeType);
-            if (uploadResult.success) {
-                console.log('✅ Upload berhasil ke tmpfiles.org');
-            } else {
-                errors.push(`tmpfiles.org: ${uploadResult.error}`);
-            }
-        }
-
-        // PRIORITAS 2: Jika tmpfiles.org gagal, coba GoFile
-        if (!uploadResult || !uploadResult.success) {
-            if (STORAGE_SERVICES.GOFILE.enabled) {
-                uploadResult = await uploadToGoFile(fileBuffer, fileName, mimeType);
-                if (uploadResult.success) {
-                    console.log('✅ Upload berhasil ke GoFile');
-                } else {
-                    errors.push(`GoFile: ${uploadResult.error}`);
-                }
-            }
-        }
-
-        // PRIORITAS 3: Jika GoFile gagal, coba tmp.ninja
-        if (!uploadResult || !uploadResult.success) {
-            if (STORAGE_SERVICES.TEMP_NINJA.enabled) {
-                uploadResult = await uploadToTempNinja(fileBuffer, fileName, mimeType);
-                if (uploadResult.success) {
-                    console.log('✅ Upload berhasil ke tmp.ninja');
-                } else {
-                    errors.push(`tmp.ninja: ${uploadResult.error}`);
-                }
-            }
-        }
-
-        // Jika semua service gagal
-        if (!uploadResult || !uploadResult.success) {
-            console.log('❌ Semua service gagal:', errors);
-            return res.status(500).json({
-                success: false,
-                error: 'Semua service penyimpanan sedang sibuk. Silakan coba lagi nanti.',
-                details: errors
-            });
-        }
-
-        // Simpan metadata file ke database
-        const fileData = {
-            id: uploadResult.fileId,
-            originalName: fileName,
-            url: uploadResult.url,
-            directUrl: uploadResult.directUrl || uploadResult.url,
-            size: fileSize,
-            mimeType: mimeType,
-            service: uploadResult.service,
-            uploadDate: new Date().toISOString(),
-            downloads: 0,
-            expiry: uploadResult.expiry || null
-        };
-
-        fileDatabase.push(fileData);
-        console.log(`✅ File tersimpan di database. Total: ${fileDatabase.length}`);
-
-        // Kirim response
-        res.json({
-            success: true,
-            url: uploadResult.url,
-            directUrl: uploadResult.directUrl || uploadResult.url,
-            fileId: uploadResult.fileId,
-            service: uploadResult.service,
-            fileName: fileName,
-            fileSize: fileSize,
-            expiry: uploadResult.expiry,
-            message: `File berhasil diupload menggunakan ${uploadResult.service}${uploadResult.expiry ? ' (berlaku 60 menit)' : ''}`
-        });
-
-    } catch (error) {
-        console.error('❌ Upload error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Terjadi kesalahan saat upload file: ' + error.message
-        });
+  console.log('📢 Upload endpoint dipanggil');
+  
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'Tidak ada file yang diupload'
+      });
     }
+
+    // File sudah otomatis terupload ke Cloudinary oleh multer-storage-cloudinary
+    const file = req.file;
+    
+    console.log('✅ File uploaded to Cloudinary:', file.path);
+    console.log('File details:', {
+      originalname: file.originalname,
+      size: file.size,
+      mimetype: file.mimetype,
+      cloudinary_url: file.path,
+      public_id: file.filename
+    });
+
+    // Generate ID lokal untuk database kita
+    const localId = generateLocalId();
+
+    // Simpan metadata ke database lokal
+    const fileData = {
+      id: localId,
+      originalName: file.originalname,
+      url: file.path, // URL dari Cloudinary
+      directUrl: file.path,
+      publicId: file.filename, // Public ID di Cloudinary
+      size: file.size,
+      mimeType: file.mimetype,
+      service: 'cloudinary',
+      uploadDate: new Date().toISOString(),
+      downloads: 0,
+      format: file.format || 'unknown'
+    };
+
+    fileDatabase.push(fileData);
+    console.log(`✅ File tersimpan di database. Total: ${fileDatabase.length}`);
+
+    // Kirim response
+    res.json({
+      success: true,
+      url: file.path,
+      directUrl: file.path,
+      fileId: localId,
+      publicId: file.filename,
+      service: 'cloudinary',
+      fileName: file.originalname,
+      fileSize: file.size,
+      format: file.format,
+      message: 'File berhasil diupload ke Cloudinary'
+    });
+
+  } catch (error) {
+    console.error('❌ Upload error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Terjadi kesalahan saat upload: ' + error.message
+    });
+  }
 });
 
-// ==================== GET FILES ====================
+// ==================== GET ALL FILES ====================
 app.get('/api/files', (req, res) => {
-    console.log('📢 Files endpoint dipanggil');
-    
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const search = req.query.search || '';
-    
-    let filteredFiles = fileDatabase;
-    
-    // Filter berdasarkan pencarian
-    if (search && search.length >= 3) {
-        filteredFiles = fileDatabase.filter(file => 
-            file.originalName.toLowerCase().includes(search.toLowerCase())
-        );
-    }
-    
-    // Sort by upload date descending
-    filteredFiles.sort((a, b) => new Date(b.uploadDate) - new Date(a.uploadDate));
-    
-    const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-    const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const search = req.query.search || '';
+  
+  let filteredFiles = fileDatabase;
+  
+  if (search && search.length >= 3) {
+    filteredFiles = fileDatabase.filter(file => 
+      file.originalName.toLowerCase().includes(search.toLowerCase())
+    );
+  }
+  
+  // Sort by upload date descending
+  filteredFiles.sort((a, b) => new Date(b.uploadDate) - new Date(a.uploadDate));
+  
+  const startIndex = (page - 1) * limit;
+  const endIndex = page * limit;
+  const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
 
-    const files = paginatedFiles.map(file => ({
-        id: file.id,
-        name: file.originalName,
-        url: file.url,
-        directUrl: file.directUrl,
-        size: file.size,
-        service: file.service,
-        uploadDate: file.uploadDate,
-        downloads: file.downloads,
-        expiry: file.expiry
-    }));
+  const files = paginatedFiles.map(file => ({
+    id: file.id,
+    name: file.originalName,
+    url: file.url,
+    publicId: file.publicId,
+    size: file.size,
+    service: file.service,
+    uploadDate: file.uploadDate,
+    downloads: file.downloads,
+    format: file.format
+  }));
 
-    res.json({
-        success: true,
-        files: files,
-        total: filteredFiles.length,
-        page: page,
-        totalPages: Math.ceil(filteredFiles.length / limit) || 1,
-        limit: limit
-    });
+  res.json({
+    success: true,
+    files: files,
+    total: filteredFiles.length,
+    page: page,
+    totalPages: Math.ceil(filteredFiles.length / limit) || 1,
+    limit: limit
+  });
 });
 
 // ==================== GET FILE INFO ====================
-app.get('/api/files/:id', (req, res) => {
-    console.log('📢 File info endpoint dipanggil untuk ID:', req.params.id);
+app.get('/api/files/:id', async (req, res) => {
+  try {
+    // Cari di database lokal dulu
+    const localFile = fileDatabase.find(f => f.id === req.params.id);
     
-    const file = fileDatabase.find(f => f.id === req.params.id);
-    
-    if (!file) {
-        return res.status(404).json({
-            success: false,
-            error: 'File tidak ditemukan'
-        });
+    if (!localFile) {
+      return res.status(404).json({
+        success: false,
+        error: 'File tidak ditemukan'
+      });
     }
 
-    res.json({
+    // Ambil info tambahan dari Cloudinary
+    try {
+      const cloudinaryInfo = await cloudinary.api.resource(localFile.publicId, {
+        colors: true,
+        image_metadata: true,
+        exif: true
+      });
+
+      res.json({
         success: true,
         file: {
-            id: file.id,
-            name: file.originalName,
-            url: file.url,
-            directUrl: file.directUrl,
-            size: file.size,
-            mimeType: file.mimeType,
-            service: file.service,
-            uploadDate: file.uploadDate,
-            downloads: file.downloads,
-            expiry: file.expiry
+          id: localFile.id,
+          name: localFile.originalName,
+          url: localFile.url,
+          publicId: localFile.publicId,
+          size: localFile.size,
+          format: cloudinaryInfo.format,
+          width: cloudinaryInfo.width,
+          height: cloudinaryInfo.height,
+          bytes: cloudinaryInfo.bytes,
+          created_at: cloudinaryInfo.created_at,
+          service: 'cloudinary',
+          uploadDate: localFile.uploadDate,
+          downloads: localFile.downloads,
+          colors: cloudinaryInfo.colors,
+          tags: cloudinaryInfo.tags
         }
+      });
+    } catch (cloudinaryError) {
+      // Jika gagal ambil dari Cloudinary, return data lokal saja
+      res.json({
+        success: true,
+        file: localFile
+      });
+    }
+  } catch (error) {
+    console.error('Error getting file info:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error mendapatkan info file'
     });
+  }
 });
 
 // ==================== GET STATS ====================
 app.get('/api/stats', (req, res) => {
-    console.log('📢 Stats endpoint dipanggil');
-    
-    const totalFiles = fileDatabase.length;
-    const totalSize = fileDatabase.reduce((acc, file) => acc + file.size, 0);
-    const totalDownloads = fileDatabase.reduce((acc, file) => acc + file.downloads, 0);
+  const totalFiles = fileDatabase.length;
+  const totalSize = fileDatabase.reduce((acc, file) => acc + file.size, 0);
+  const totalDownloads = fileDatabase.reduce((acc, file) => acc + file.downloads, 0);
 
-    // Hitung statistik per service
-    const serviceStats = {};
-    fileDatabase.forEach(file => {
-        if (!serviceStats[file.service]) {
-            serviceStats[file.service] = {
-                count: 0,
-                size: 0
-            };
-        }
-        serviceStats[file.service].count++;
-        serviceStats[file.service].size += file.size;
-    });
+  // Statistik per format
+  const formatStats = {};
+  fileDatabase.forEach(file => {
+    const format = file.format || 'unknown';
+    if (!formatStats[format]) {
+      formatStats[format] = {
+        count: 0,
+        size: 0
+      };
+    }
+    formatStats[format].count++;
+    formatStats[format].size += file.size;
+  });
 
-    res.json({
-        success: true,
-        stats: {
-            totalFiles,
-            totalSize,
-            totalDownloads,
-            services: serviceStats
-        }
-    });
+  res.json({
+    success: true,
+    stats: {
+      totalFiles,
+      totalSize,
+      totalDownloads,
+      formats: formatStats,
+      cloudinary: {
+        used: totalFiles
+      }
+    }
+  });
 });
 
 // ==================== TRACK DOWNLOAD ====================
 app.post('/api/files/:id/download', (req, res) => {
-    const file = fileDatabase.find(f => f.id === req.params.id);
-    
-    if (!file) {
-        return res.status(404).json({
-            success: false,
-            error: 'File tidak ditemukan'
-        });
-    }
-
-    file.downloads += 1;
-
-    res.json({
-        success: true,
-        downloads: file.downloads
+  const file = fileDatabase.find(f => f.id === req.params.id);
+  
+  if (!file) {
+    return res.status(404).json({
+      success: false,
+      error: 'File tidak ditemukan'
     });
+  }
+
+  file.downloads += 1;
+  res.json({ success: true, downloads: file.downloads });
 });
 
 // ==================== DELETE FILE ====================
-app.delete('/api/files/:id', (req, res) => {
-    const index = fileDatabase.findIndex(f => f.id === req.params.id);
+app.delete('/api/files/:id', async (req, res) => {
+  try {
+    const fileIndex = fileDatabase.findIndex(f => f.id === req.params.id);
     
-    if (index === -1) {
-        return res.status(404).json({
-            success: false,
-            error: 'File tidak ditemukan'
-        });
+    if (fileIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        error: 'File tidak ditemukan'
+      });
     }
 
-    const deletedFile = fileDatabase[index];
-    fileDatabase.splice(index, 1);
+    const file = fileDatabase[fileIndex];
+
+    // Hapus dari Cloudinary
+    try {
+      await cloudinary.uploader.destroy(file.publicId);
+      console.log(`✅ File ${file.publicId} dihapus dari Cloudinary`);
+    } catch (cloudinaryError) {
+      console.error('Error deleting from Cloudinary:', cloudinaryError);
+    }
+
+    // Hapus dari database lokal
+    fileDatabase.splice(fileIndex, 1);
 
     res.json({
-        success: true,
-        message: 'File berhasil dihapus dari database',
-        file: {
-            id: deletedFile.id,
-            name: deletedFile.originalName
-        }
+      success: true,
+      message: 'File berhasil dihapus'
     });
+  } catch (error) {
+    console.error('Error deleting file:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error menghapus file'
+    });
+  }
+});
+
+// ==================== GET CLOUDINARY USAGE ====================
+app.get('/api/cloudinary/usage', async (req, res) => {
+  try {
+    const usage = await cloudinary.api.usage();
+    res.json({
+      success: true,
+      usage: {
+        plan: usage.plan,
+        credits: usage.credits,
+        usage: usage.usage,
+        limit: usage.limit
+      }
+    });
+  } catch (error) {
+    console.error('Error getting Cloudinary usage:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error mendapatkan info usage'
+    });
+  }
+});
+
+// ==================== TRANSFORM IMAGE ====================
+app.get('/api/transform/:publicId', (req, res) => {
+  const { publicId } = req.params;
+  const { width, height, crop, gravity, effect } = req.query;
+
+  try {
+    // Buat URL dengan transformasi
+    let transformation = [];
+    
+    if (width) transformation.push({ width: parseInt(width) });
+    if (height) transformation.push({ height: parseInt(height) });
+    if (crop) transformation.push({ crop });
+    if (gravity) transformation.push({ gravity });
+    if (effect) transformation.push({ effect });
+
+    const imageUrl = cloudinary.url(publicId, {
+      transformation: transformation,
+      secure: true
+    });
+
+    res.json({
+      success: true,
+      url: imageUrl,
+      publicId: publicId,
+      transformations: transformation
+    });
+  } catch (error) {
+    console.error('Error transforming image:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error transformasi gambar'
+    });
+  }
 });
 
 // ==================== HEALTH CHECK ====================
 app.get('/api/health', (req, res) => {
-    res.json({
-        status: 'OK',
-        timestamp: new Date().toISOString(),
-        files: fileDatabase.length,
-        memory: process.memoryUsage(),
-        services: Object.keys(STORAGE_SERVICES).filter(s => STORAGE_SERVICES[s].enabled)
-    });
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    files: fileDatabase.length,
+    service: 'Cloudinary',
+    cloudinary_configured: true
+  });
 });
 
 // ==================== TEST ENDPOINT ====================
 app.get('/api/test', (req, res) => {
-    res.json({
-        success: true,
-        message: 'API berjalan dengan baik',
-        timestamp: new Date().toISOString(),
-        services: Object.keys(STORAGE_SERVICES).filter(s => STORAGE_SERVICES[s].enabled)
-    });
-});
-
-// ==================== CLEANUP EXPIRED FILES ====================
-setInterval(() => {
-    const now = new Date();
-    const beforeCount = fileDatabase.length;
-    
-    fileDatabase = fileDatabase.filter(file => {
-        if (file.expiry) {
-            return new Date(file.expiry) > now;
-        }
-        return true; // File tanpa expiry tetap disimpan
-    });
-    
-    const afterCount = fileDatabase.length;
-    if (beforeCount !== afterCount) {
-        console.log(`🧹 Cleanup: ${beforeCount - afterCount} file expired dihapus dari database`);
+  res.json({
+    success: true,
+    message: 'API Cloudinary berjalan dengan baik',
+    timestamp: new Date().toISOString(),
+    files: fileDatabase.length,
+    cloudinary: {
+      configured: true,
+      cloud_name: cloudinary.config().cloud_name
     }
-}, 60000); // Cek setiap 1 menit
+  });
+});
 
 // ==================== ROUTES ====================
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Handle 404 untuk API routes
-app.use('/api/*', (req, res) => {
-    res.status(404).json({
-        success: false,
-        error: 'Endpoint API tidak ditemukan'
-    });
-});
-
-// Handle 404 untuk routes lain
+// Handle 404
 app.use((req, res) => {
-    if (req.path.startsWith('/api/')) {
-        res.status(404).json({
-            success: false,
-            error: 'Endpoint tidak ditemukan'
-        });
-    } else {
-        res.sendFile(path.join(__dirname, 'public', 'index.html'));
-    }
+  if (req.path.startsWith('/api/')) {
+    res.status(404).json({
+      success: false,
+      error: 'Endpoint API tidak ditemukan'
+    });
+  } else {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  }
 });
 
 // Error handler
 app.use((err, req, res, next) => {
-    console.error('❌ Error:', err.stack);
-    
-    if (req.path.startsWith('/api/')) {
-        res.status(500).json({
-            success: false,
-            error: 'Terjadi kesalahan pada server: ' + err.message
-        });
-    } else {
-        res.status(500).send('Terjadi kesalahan pada server');
-    }
+  console.error('❌ Error:', err.stack);
+  
+  if (req.path.startsWith('/api/')) {
+    res.status(500).json({
+      success: false,
+      error: 'Terjadi kesalahan pada server: ' + err.message
+    });
+  } else {
+    res.status(500).send('Terjadi kesalahan pada server');
+  }
 });
 
 // ==================== START SERVER ====================
 if (require.main === module) {
-    app.listen(PORT, () => {
-        console.log(`\n🚀 Server berjalan di http://localhost:${PORT}`);
-        console.log(`📡 Mode: ${process.env.VERCEL ? 'Vercel' : 'Local'}`);
-        console.log(`🔧 Service aktif: ${Object.keys(STORAGE_SERVICES).filter(s => STORAGE_SERVICES[s].enabled).join(', ')}`);
-        console.log(`📝 Test API: http://localhost:${PORT}/api/test\n`);
-    });
+  app.listen(PORT, () => {
+    console.log(`\n🚀 Server berjalan di http://localhost:${PORT}`);
+    console.log(`📡 Mode: ${process.env.VERCEL ? 'Vercel' : 'Local'}`);
+    console.log(`☁️  Cloudinary: ${cloudinary.config().cloud_name}`);
+    console.log(`📝 Test API: http://localhost:${PORT}/api/test\n`);
+  });
 }
 
-// Export untuk Vercel
 module.exports = app;
