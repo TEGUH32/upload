@@ -19,7 +19,7 @@ const PORT = process.env.PORT || 3000;
 cloudinary.config({
   cloud_name: 'deswvfe4w',
   api_key: '951531676243719',
-  api_secret: '951531676243719',
+  api_secret: 'gh_1AgpnF_jL7ldBRhanMrgxAM',
   secure: true
 });
 
