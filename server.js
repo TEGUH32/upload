@@ -1,4 +1,6 @@
 // server.js - File Upload Service dengan Cloudinary
+// Lengkap dengan semua fitur dan error handling
+
 require('dotenv').config();
 
 const express = require('express');
@@ -13,78 +15,118 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ==================== CLOUDINARY CONFIGURATION ====================
-// Gunakan cloud name yang benar: deswvfe4w
+// Konfigurasi dengan cloud name yang benar: deswvfe4w
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'deswvfe4w',
-  api_key: process.env.CLOUDINARY_API_KEY || '649231255323586',
-  api_secret: process.env.CLOUDINARY_API_SECRET || '-gh_1AgpnF_jL7ldBRhanMrgxAM',
+  cloud_name: 'deswvfe4w',
+  api_key: '951531676243719',
+  api_secret: '951531676243719',
   secure: true
 });
 
-console.log('✅ Cloudinary configured dengan:');
+console.log('☁️  Cloudinary Configuration:');
 console.log('   Cloud Name:', cloudinary.config().cloud_name);
 console.log('   API Key:', cloudinary.config().api_key ? '✓ Set' : '✗ Missing');
 console.log('   API Secret:', cloudinary.config().api_secret ? '✓ Set' : '✗ Missing');
 
-// Test koneksi Cloudinary
+// ==================== TEST CLOUDINARY CONNECTION ====================
 async function testCloudinaryConnection() {
   try {
-    // Coba panggil API sederhana untuk test koneksi
+    // Test sederhana dengan ping
     const result = await cloudinary.api.ping();
-    console.log('✅ Koneksi Cloudinary berhasil!');
+    console.log('✅ Cloudinary connection successful!');
     return true;
   } catch (error) {
-    console.error('❌ Koneksi Cloudinary gagal:', error.message);
+    console.error('❌ Cloudinary connection failed:', error.message);
     return false;
   }
 }
 
-// Panggil test koneksi
+// Panggil test connection
 testCloudinaryConnection();
 
 // ==================== MIDDLEWARE ====================
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ==================== MULTER STORAGE UNTUK CLOUDINARY ====================
+// Buat folder di Cloudinary untuk menyimpan file
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: {
-    folder: 'mycatbox', // Folder di Cloudinary
-    resource_type: 'auto', // Auto-detect file type
-    public_id: (req, file) => {
-      // Generate unique filename tanpa karakter khusus
-      const originalName = file.originalname.split('.')[0];
-      const safeName = originalName.replace(/[^a-zA-Z0-9]/g, '-');
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      return `${safeName}-${uniqueSuffix}`;
-    },
-    format: (req, file) => {
-      // Ambil ekstensi file asli
-      const ext = file.originalname.split('.').pop();
-      return ext;
-    }
+  params: async (req, file) => {
+    // Generate unique filename
+    const originalName = file.originalname.split('.')[0];
+    // Hapus karakter khusus dan spasi
+    const safeName = originalName
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const publicId = `${safeName}-${uniqueSuffix}`;
+    
+    // Dapatkan ekstensi file
+    const extension = file.originalname.split('.').pop().toLowerCase();
+    
+    console.log('📝 Generating public_id:', publicId);
+    
+    return {
+      folder: 'mycatbox',
+      public_id: publicId,
+      format: extension,
+      resource_type: 'auto', // Auto-detect file type
+      allowed_formats: ['jpg', 'png', 'gif', 'webp', 'mp4', 'pdf', 'doc', 'docx', 'txt', 'zip', 'rar', 'mp3'],
+      transformation: [{ quality: 'auto' }] // Optimasi otomatis
+    };
   }
 });
 
+// Filter file (optional - bisa dihapus jika ingin semua format)
+const fileFilter = (req, file, cb) => {
+  // Izinkan semua jenis file
+  cb(null, true);
+};
+
 const upload = multer({ 
   storage: storage,
+  fileFilter: fileFilter,
   limits: {
     fileSize: 100 * 1024 * 1024 // 100MB
   }
 });
 
-// ==================== DATABASE SEDERHANA ====================
+// ==================== DATABASE SEDERHANA (IN-MEMORY) ====================
+// Untuk production, ganti dengan database sungguhan seperti MongoDB
 let fileDatabase = [];
 
-// Fungsi generate ID lokal
+// Fungsi generate ID unik untuk database lokal
 function generateLocalId() {
   return crypto.randomBytes(8).toString('hex');
 }
 
-// ==================== TEST ENDPOINT ====================
+// ==================== CLEANUP FUNCTION ====================
+// Hapus file dari Cloudinary jika ada error
+async function cleanupCloudinaryFile(publicId) {
+  try {
+    if (publicId) {
+      await cloudinary.uploader.destroy(publicId);
+      console.log('🧹 Cleanup: File dihapus dari Cloudinary:', publicId);
+    }
+  } catch (error) {
+    console.error('Error cleanup:', error);
+  }
+}
+
+// ==================== API ENDPOINTS ====================
+
+// [1] TEST ENDPOINT - Untuk cek koneksi
 app.get('/api/test', async (req, res) => {
   try {
     const ping = await cloudinary.api.ping();
@@ -92,41 +134,54 @@ app.get('/api/test', async (req, res) => {
       success: true,
       message: '✅ Cloudinary connected successfully',
       cloud_name: cloudinary.config().cloud_name,
-      ping: ping,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      ping: ping
     });
   } catch (error) {
-    res.json({
+    res.status(500).json({
       success: false,
       message: '❌ Cloudinary connection failed',
       error: error.message,
-      cloud_name: cloudinary.config().cloud_name,
-      timestamp: new Date().toISOString()
+      cloud_name: cloudinary.config().cloud_name
     });
   }
 });
 
-// ==================== UPLOAD ENDPOINT ====================
+// [2] UPLOAD ENDPOINT - Upload file ke Cloudinary
 app.post('/api/upload', upload.single('file'), async (req, res) => {
-  console.log('📢 Upload endpoint dipanggil');
+  console.log('\n📢 UPLOAD ENDPOINT DIPANGGIL');
   
   try {
+    // Cek apakah ada file
     if (!req.file) {
+      console.log('❌ Tidak ada file');
       return res.status(400).json({
         success: false,
         error: 'Tidak ada file yang diupload'
       });
     }
 
-    console.log('✅ File uploaded ke Cloudinary:');
-    console.log('   URL:', req.file.path);
-    console.log('   Public ID:', req.file.filename);
+    // Log detail file
+    console.log('✅ File received:');
+    console.log('   Original Name:', req.file.originalname);
     console.log('   Size:', req.file.size, 'bytes');
+    console.log('   Mimetype:', req.file.mimetype);
+    console.log('   Cloudinary URL:', req.file.path);
+    console.log('   Public ID:', req.file.filename);
+
+    // Validasi ukuran file
+    if (req.file.size > 100 * 1024 * 1024) {
+      await cleanupCloudinaryFile(req.file.filename);
+      return res.status(400).json({
+        success: false,
+        error: 'Ukuran file terlalu besar. Maksimal 100MB'
+      });
+    }
 
     // Generate ID lokal
     const localId = generateLocalId();
 
-    // Simpan ke database lokal
+    // Simpan metadata ke database lokal
     const fileData = {
       id: localId,
       originalName: req.file.originalname,
@@ -134,15 +189,16 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       publicId: req.file.filename,
       size: req.file.size,
       mimeType: req.file.mimetype,
+      format: req.file.originalname.split('.').pop().toLowerCase(),
       service: 'cloudinary',
       uploadDate: new Date().toISOString(),
       downloads: 0
     };
 
     fileDatabase.push(fileData);
-    console.log(`✅ Total file di database: ${fileDatabase.length}`);
+    console.log(`📊 Total files in database: ${fileDatabase.length}`);
 
-    // Kirim response
+    // Kirim response sukses
     res.json({
       success: true,
       url: req.file.path,
@@ -152,112 +208,202 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       service: 'cloudinary',
       fileName: req.file.originalname,
       fileSize: req.file.size,
-      message: 'File berhasil diupload ke Cloudinary'
+      format: fileData.format,
+      message: '✅ File berhasil diupload ke Cloudinary'
     });
 
   } catch (error) {
     console.error('❌ Upload error:', error);
+    
+    // Cleanup jika ada file yang terupload sebagian
+    if (req.file && req.file.filename) {
+      await cleanupCloudinaryFile(req.file.filename);
+    }
+    
     res.status(500).json({
       success: false,
-      error: 'Terjadi kesalahan pada server: ' + error.message
+      error: 'Terjadi kesalahan saat upload: ' + error.message
     });
   }
 });
 
-// ==================== GET ALL FILES ====================
+// [3] GET ALL FILES - Mendapatkan daftar file dengan pagination
 app.get('/api/files', (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 20;
-  const search = req.query.search || '';
-  
-  let filteredFiles = fileDatabase;
-  
-  if (search && search.length >= 3) {
-    filteredFiles = fileDatabase.filter(file => 
-      file.originalName.toLowerCase().includes(search.toLowerCase())
-    );
-  }
-  
-  filteredFiles.sort((a, b) => new Date(b.uploadDate) - new Date(a.uploadDate));
-  
-  const startIndex = (page - 1) * limit;
-  const endIndex = page * limit;
-  const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
-
-  const files = paginatedFiles.map(file => ({
-    id: file.id,
-    name: file.originalName,
-    url: file.url,
-    publicId: file.publicId,
-    size: file.size,
-    service: file.service,
-    uploadDate: file.uploadDate,
-    downloads: file.downloads
-  }));
-
-  res.json({
-    success: true,
-    files: files,
-    total: filteredFiles.length,
-    page: page,
-    totalPages: Math.ceil(filteredFiles.length / limit) || 1,
-    limit: limit
-  });
-});
-
-// ==================== GET FILE INFO ====================
-app.get('/api/files/:id', (req, res) => {
-  const file = fileDatabase.find(f => f.id === req.params.id);
-  
-  if (!file) {
-    return res.status(404).json({
-      success: false,
-      error: 'File tidak ditemukan'
-    });
-  }
-
-  res.json({
-    success: true,
-    file: file
-  });
-});
-
-// ==================== GET STATS ====================
-app.get('/api/stats', (req, res) => {
-  const totalFiles = fileDatabase.length;
-  const totalSize = fileDatabase.reduce((acc, file) => acc + file.size, 0);
-  const totalDownloads = fileDatabase.reduce((acc, file) => acc + file.downloads, 0);
-
-  res.json({
-    success: true,
-    stats: {
-      totalFiles,
-      totalSize,
-      totalDownloads,
-      cloudinary: {
-        cloud_name: cloudinary.config().cloud_name,
-        files: totalFiles
-      }
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const search = req.query.search || '';
+    
+    let filteredFiles = fileDatabase;
+    
+    // Filter berdasarkan pencarian
+    if (search && search.length >= 3) {
+      filteredFiles = fileDatabase.filter(file => 
+        file.originalName.toLowerCase().includes(search.toLowerCase())
+      );
     }
-  });
-});
+    
+    // Sort by upload date descending (terbaru dulu)
+    filteredFiles.sort((a, b) => new Date(b.uploadDate) - new Date(a.uploadDate));
+    
+    // Pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = page * limit;
+    const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
 
-// ==================== TRACK DOWNLOAD ====================
-app.post('/api/files/:id/download', (req, res) => {
-  const file = fileDatabase.find(f => f.id === req.params.id);
-  
-  if (!file) {
-    return res.status(404).json({
+    // Format response
+    const files = paginatedFiles.map(file => ({
+      id: file.id,
+      name: file.originalName,
+      url: file.url,
+      publicId: file.publicId,
+      size: file.size,
+      format: file.format || 'unknown',
+      service: file.service,
+      uploadDate: file.uploadDate,
+      downloads: file.downloads
+    }));
+
+    res.json({
+      success: true,
+      files: files,
+      total: filteredFiles.length,
+      page: page,
+      totalPages: Math.ceil(filteredFiles.length / limit) || 1,
+      limit: limit
+    });
+
+  } catch (error) {
+    console.error('Error getting files:', error);
+    res.status(500).json({
       success: false,
-      error: 'File tidak ditemukan'
+      error: 'Gagal mengambil daftar file'
     });
   }
-
-  file.downloads += 1;
-  res.json({ success: true, downloads: file.downloads });
 });
 
-// ==================== DELETE FILE ====================
+// [4] GET FILE INFO - Mendapatkan detail file berdasarkan ID
+app.get('/api/files/:id', async (req, res) => {
+  try {
+    const file = fileDatabase.find(f => f.id === req.params.id);
+    
+    if (!file) {
+      return res.status(404).json({
+        success: false,
+        error: 'File tidak ditemukan'
+      });
+    }
+
+    // Coba ambil info tambahan dari Cloudinary
+    try {
+      const cloudinaryInfo = await cloudinary.api.resource(file.publicId, {
+        colors: true,
+        image_metadata: true,
+        exif: true
+      });
+
+      res.json({
+        success: true,
+        file: {
+          ...file,
+          width: cloudinaryInfo.width,
+          height: cloudinaryInfo.height,
+          format: cloudinaryInfo.format,
+          created_at: cloudinaryInfo.created_at,
+          bytes: cloudinaryInfo.bytes,
+          colors: cloudinaryInfo.colors
+        }
+      });
+    } catch (cloudinaryError) {
+      // Jika gagal ambil dari Cloudinary, return data lokal saja
+      res.json({
+        success: true,
+        file: file
+      });
+    }
+
+  } catch (error) {
+    console.error('Error getting file info:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Gagal mendapatkan info file'
+    });
+  }
+});
+
+// [5] GET STATS - Mendapatkan statistik
+app.get('/api/stats', (req, res) => {
+  try {
+    const totalFiles = fileDatabase.length;
+    const totalSize = fileDatabase.reduce((acc, file) => acc + file.size, 0);
+    const totalDownloads = fileDatabase.reduce((acc, file) => acc + file.downloads, 0);
+
+    // Statistik per format
+    const formatStats = {};
+    fileDatabase.forEach(file => {
+      const format = file.format || 'unknown';
+      if (!formatStats[format]) {
+        formatStats[format] = {
+          count: 0,
+          size: 0
+        };
+      }
+      formatStats[format].count++;
+      formatStats[format].size += file.size;
+    });
+
+    res.json({
+      success: true,
+      stats: {
+        totalFiles,
+        totalSize,
+        totalDownloads,
+        formats: formatStats,
+        cloudinary: {
+          cloud_name: cloudinary.config().cloud_name,
+          files_in_db: totalFiles
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting stats:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Gagal mendapatkan statistik'
+    });
+  }
+});
+
+// [6] TRACK DOWNLOAD - Increment download counter
+app.post('/api/files/:id/download', (req, res) => {
+  try {
+    const file = fileDatabase.find(f => f.id === req.params.id);
+    
+    if (!file) {
+      return res.status(404).json({
+        success: false,
+        error: 'File tidak ditemukan'
+      });
+    }
+
+    file.downloads += 1;
+    
+    res.json({
+      success: true,
+      downloads: file.downloads
+    });
+
+  } catch (error) {
+    console.error('Error tracking download:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Gagal mencatat download'
+    });
+  }
+});
+
+// [7] DELETE FILE - Hapus file dari database dan Cloudinary
 app.delete('/api/files/:id', async (req, res) => {
   try {
     const fileIndex = fileDatabase.findIndex(f => f.id === req.params.id);
@@ -273,46 +419,122 @@ app.delete('/api/files/:id', async (req, res) => {
 
     // Hapus dari Cloudinary
     try {
-      await cloudinary.uploader.destroy(file.publicId);
-      console.log(`✅ File ${file.publicId} dihapus dari Cloudinary`);
+      const result = await cloudinary.uploader.destroy(file.publicId);
+      console.log('🗑️  Cloudinary delete result:', result);
     } catch (cloudinaryError) {
       console.error('Error deleting from Cloudinary:', cloudinaryError);
+      // Tetap lanjutkan untuk hapus dari database
     }
 
     // Hapus dari database
     fileDatabase.splice(fileIndex, 1);
+    console.log(`📊 File deleted. Total files: ${fileDatabase.length}`);
 
     res.json({
       success: true,
-      message: 'File berhasil dihapus'
+      message: 'File berhasil dihapus',
+      file: {
+        id: file.id,
+        name: file.originalName
+      }
     });
+
   } catch (error) {
+    console.error('Error deleting file:', error);
     res.status(500).json({
       success: false,
-      error: 'Error menghapus file'
+      error: 'Gagal menghapus file'
     });
   }
 });
 
-// ==================== HEALTH CHECK ====================
+// [8] CLOUDINARY USAGE - Mendapatkan info usage Cloudinary
+app.get('/api/cloudinary/usage', async (req, res) => {
+  try {
+    const usage = await cloudinary.api.usage();
+    res.json({
+      success: true,
+      usage: {
+        plan: usage.plan,
+        credits_usage: usage.credits?.usage || 0,
+        credits_limit: usage.credits?.limit || 'Unlimited',
+        storage_usage: usage.storage?.usage || 0,
+        storage_limit: usage.storage?.limit || 0,
+        bandwidth_usage: usage.bandwidth?.usage || 0,
+        bandwidth_limit: usage.bandwidth?.limit || 0,
+        requests: usage.requests || 0
+      }
+    });
+  } catch (error) {
+    console.error('Error getting Cloudinary usage:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Gagal mendapatkan info usage'
+    });
+  }
+});
+
+// [9] TRANSFORM IMAGE - Generate URL dengan transformasi
+app.get('/api/transform/:publicId', (req, res) => {
+  try {
+    const { publicId } = req.params;
+    const { width, height, crop, gravity, effect, quality } = req.query;
+
+    // Buat transformasi
+    let transformation = [];
+    
+    if (width) transformation.push({ width: parseInt(width) });
+    if (height) transformation.push({ height: parseInt(height) });
+    if (crop) transformation.push({ crop });
+    if (gravity) transformation.push({ gravity });
+    if (effect) transformation.push({ effect });
+    if (quality) transformation.push({ quality: quality === 'auto' ? 'auto' : parseInt(quality) });
+
+    // Generate URL
+    const imageUrl = cloudinary.url(publicId, {
+      transformation: transformation,
+      secure: true,
+      fetch_format: 'auto',
+      quality: 'auto'
+    });
+
+    res.json({
+      success: true,
+      url: imageUrl,
+      publicId: publicId,
+      transformations: transformation
+    });
+
+  } catch (error) {
+    console.error('Error transforming image:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Gagal transformasi gambar'
+    });
+  }
+});
+
+// [10] HEALTH CHECK - Cek status server
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    files: fileDatabase.length,
+    uptime: process.uptime(),
+    files_in_db: fileDatabase.length,
     cloudinary: {
       configured: true,
       cloud_name: cloudinary.config().cloud_name
-    }
+    },
+    memory: process.memoryUsage()
   });
 });
 
-// ==================== ROUTES ====================
+// ==================== ROOT ENDPOINT ====================
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Handle 404
+// ==================== 404 HANDLER ====================
 app.use((req, res) => {
   if (req.path.startsWith('/api/')) {
     res.status(404).json({
@@ -320,23 +542,70 @@ app.use((req, res) => {
       error: 'Endpoint API tidak ditemukan'
     });
   } else {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.status(404).sendFile(path.join(__dirname, 'public', 'index.html'));
   }
 });
 
-// Error handler
+// ==================== ERROR HANDLER ====================
 app.use((err, req, res, next) => {
-  console.error('❌ Error:', err.stack);
+  console.error('❌ Global error:', err.stack);
+  
+  // Multer error handling
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        error: 'File terlalu besar. Maksimal 100MB'
+      });
+    }
+    return res.status(400).json({
+      success: false,
+      error: 'Upload error: ' + err.message
+    });
+  }
+  
+  // Cloudinary error handling
+  if (err.name === 'CloudinaryError') {
+    return res.status(500).json({
+      success: false,
+      error: 'Cloudinary error: ' + err.message
+    });
+  }
+  
+  // Default error
   res.status(500).json({
     success: false,
     error: 'Terjadi kesalahan pada server: ' + err.message
   });
 });
 
+// ==================== CLEANUP INTERVAL ====================
+// Hapus file expired? Cloudinary permanen, jadi tidak perlu
+
 // ==================== START SERVER ====================
-app.listen(PORT, () => {
-  console.log(`\n🚀 Server berjalan di http://localhost:${PORT}`);
-  console.log(`📡 Mode: ${process.env.VERCEL ? 'Vercel' : 'Local'}`);
+app.listen(PORT, async () => {
+  console.log('\n' + '='.repeat(50));
+  console.log(`🚀 SERVER STARTED`);
+  console.log('='.repeat(50));
+  console.log(`📍 Port: http://localhost:${PORT}`);
   console.log(`☁️  Cloud Name: deswvfe4w`);
-  console.log(`📝 Test API: http://localhost:${PORT}/api/test\n`);
+  console.log(`📁 Upload folder: mycatbox`);
+  console.log(`📊 Max file size: 100MB`);
+  console.log('='.repeat(50));
+  console.log(`📝 Test API: http://localhost:${PORT}/api/test`);
+  console.log(`📝 Health Check: http://localhost:${PORT}/api/health`);
+  console.log('='.repeat(50) + '\n');
+  
+  // Test Cloudinary connection on startup
+  const isConnected = await testCloudinaryConnection();
+  if (!isConnected) {
+    console.log('\n⚠️  PERINGATAN: Cloudinary tidak terhubung!');
+    console.log('   Pastikan:');
+    console.log('   1. Cloud name "deswvfe4w" benar');
+    console.log('   2. API key dan secret benar');
+    console.log('   3. Koneksi internet aktif\n');
+  }
 });
+
+// Export untuk Vercel
+module.exports = app;
