@@ -1,5 +1,6 @@
 // server.js - File Upload Service dengan Cloudinary
-// Lengkap dengan semua fitur dan error handling
+// AMAN: Semua credentials dari environment variables
+// JANGAN commit file ini tanpa .env!
 
 require('dotenv').config();
 
@@ -10,23 +11,47 @@ const path = require('path');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const crypto = require('crypto');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ==================== VALIDASI ENVIRONMENT VARIABLES ====================
+const requiredEnvVars = ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'];
+const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+
+if (missingEnvVars.length > 0) {
+  console.error('\n❌ ERROR: Environment variables missing!');
+  console.error('   Missing:', missingEnvVars.join(', '));
+  console.error('   Please create .env file with:');
+  console.error(`
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+PORT=3000
+  `);
+  console.error('\n   🔐 Jangan commit .env ke git!\n');
+  
+  if (process.env.NODE_ENV === 'production') {
+    // Di production, exit dengan error
+    process.exit(1);
+  }
+}
+
 // ==================== CLOUDINARY CONFIGURATION ====================
-// Konfigurasi dengan cloud name yang benar: deswvfe4w
+// SEMUA CREDENTIALS DARI ENVIRONMENT VARIABLES
 cloudinary.config({
-  cloud_name: 'deswvfe4w',
-  api_key: '649231255323586',
-  api_secret: 'gh_1AgpnF_jL7ldBRhanMrgxAM',
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
   secure: true
 });
 
-console.log('☁️  Cloudinary Configuration:');
-console.log('   Cloud Name:', cloudinary.config().cloud_name);
-console.log('   API Key:', cloudinary.config().api_key ? '✓ Set' : '✗ Missing');
-console.log('   API Secret:', cloudinary.config().api_secret ? '✓ Set' : '✗ Missing');
+// Log konfigurasi (tanpa menampilkan secret)
+console.log('\n☁️  Cloudinary Configuration:');
+console.log(`   Cloud Name: ${cloudinary.config().cloud_name ? '✓ Set' : '✗ Missing'}`);
+console.log(`   API Key: ${process.env.CLOUDINARY_API_KEY ? '✓ Set' : '✗ Missing'}`);
+console.log(`   API Secret: ${process.env.CLOUDINARY_API_SECRET ? '✓ Set' : '✗ Missing'}`);
 
 // ==================== TEST CLOUDINARY CONNECTION ====================
 async function testCloudinaryConnection() {
@@ -82,7 +107,6 @@ const storage = new CloudinaryStorage({
       public_id: publicId,
       format: extension,
       resource_type: 'auto', // Auto-detect file type
-      allowed_formats: ['jpg', 'png', 'gif', 'webp', 'mp4', 'pdf', 'doc', 'docx', 'txt', 'zip', 'rar', 'mp3'],
       transformation: [{ quality: 'auto' }] // Optimasi otomatis
     };
   }
@@ -161,7 +185,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       });
     }
 
-    // Log detail file
+    // Log detail file (tanpa informasi sensitif)
     console.log('✅ File received:');
     console.log('   Original Name:', req.file.originalname);
     console.log('   Size:', req.file.size, 'bytes');
@@ -525,7 +549,8 @@ app.get('/api/health', (req, res) => {
       configured: true,
       cloud_name: cloudinary.config().cloud_name
     },
-    memory: process.memoryUsage()
+    memory: process.memoryUsage(),
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
@@ -579,18 +604,16 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ==================== CLEANUP INTERVAL ====================
-// Hapus file expired? Cloudinary permanen, jadi tidak perlu
-
 // ==================== START SERVER ====================
 app.listen(PORT, async () => {
   console.log('\n' + '='.repeat(50));
   console.log(`🚀 SERVER STARTED`);
   console.log('='.repeat(50));
   console.log(`📍 Port: http://localhost:${PORT}`);
-  console.log(`☁️  Cloud Name: deswvfe4w`);
+  console.log(`☁️  Cloud Name: ${cloudinary.config().cloud_name ? '✓ Set' : '✗ Missing'}`);
   console.log(`📁 Upload folder: mycatbox`);
   console.log(`📊 Max file size: 100MB`);
+  console.log(`🔐 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log('='.repeat(50));
   console.log(`📝 Test API: http://localhost:${PORT}/api/test`);
   console.log(`📝 Health Check: http://localhost:${PORT}/api/health`);
@@ -600,10 +623,10 @@ app.listen(PORT, async () => {
   const isConnected = await testCloudinaryConnection();
   if (!isConnected) {
     console.log('\n⚠️  PERINGATAN: Cloudinary tidak terhubung!');
-    console.log('   Pastikan:');
-    console.log('   1. Cloud name "deswvfe4w" benar');
-    console.log('   2. API key dan secret benar');
-    console.log('   3. Koneksi internet aktif\n');
+    console.log('   Pastikan file .env sudah benar:');
+    console.log('   CLOUDINARY_CLOUD_NAME=deswvfe4w');
+    console.log('   CLOUDINARY_API_KEY=your_api_key');
+    console.log('   CLOUDINARY_API_SECRET=your_api_secret\n');
   }
 });
 
