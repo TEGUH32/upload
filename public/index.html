@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyCatBox - File Upload Service Gratis</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        header {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            color: #764ba2;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        h1 span {
+            font-size: 0.5em;
+            color: #999;
+            margin-left: 10px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 30px;
+            color: #666;
+            font-size: 14px;
+            flex-wrap: wrap;
+        }
+
+        .stats span {
+            background: #f5f5f5;
+            padding: 8px 15px;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* Upload Area */
+        .upload-area {
+            background: white;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            border: 3px dashed #764ba2;
+            transition: all 0.3s;
+        }
+
+        .upload-area.dragover {
+            background: #f0f0ff;
+            border-color: #667eea;
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 64px;
+            color: #764ba2;
+            margin-bottom: 20px;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 25px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 20px 0;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .upload-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+        }
+
+        .upload-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .file-info {
+            color: #666;
+            font-size: 14px;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 5px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        /* Result Box */
+        .result {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: none;
+        }
+
+        .result.success {
+            border-left: 5px solid #4CAF50;
+        }
+
+        .result.error {
+            border-left: 5px solid #f44336;
+        }
+
+        .url-box {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #e0e0e0;
+        }
+
+        .url-box input {
+            background: transparent;
+            border: none;
+            flex: 1;
+            font-size: 16px;
+            outline: none;
+            padding: 5px;
+            font-family: monospace;
+        }
+
+        .copy-btn {
+            background: #764ba2;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 10px;
+            transition: background 0.3s;
+        }
+
+        .copy-btn:hover {
+            background: #5a3d7c;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .action-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
+            color: white;
+        }
+
+        .action-btn.open {
+            background: #4CAF50;
+        }
+
+        .action-btn.open:hover {
+            background: #45a049;
+        }
+
+        .action-btn.download {
+            background: #2196F3;
+        }
+
+        .action-btn.download:hover {
+            background: #1e88e5;
+        }
+
+        /* Files Section */
+        .files-section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .files-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .files-header h3 {
+            color: #764ba2;
+            font-size: 1.5em;
+        }
+
+        .search-box {
+            padding: 12px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            width: 300px;
+            font-size: 16px;
+            transition: all 0.3s;
+            background: #f9f9f9;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: #764ba2;
+            box-shadow: 0 0 10px rgba(118, 75, 162, 0.2);
+            background: white;
+        }
+
+        .files-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .file-card {
+            background: #f9f9f9;
+            border-radius: 8px;
+            padding: 15px;
+            transition: all 0.3s;
+            border: 1px solid #e0e0e0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .file-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            border-color: #764ba2;
+        }
+
+        .file-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transform: scaleX(0);
+            transition: transform 0.3s;
+        }
+
+        .file-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .file-name {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #764ba2;
+            word-break: break-all;
+            font-size: 1.1em;
+            padding-right: 30px;
+        }
+
+        .file-meta {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+
+        .file-meta span {
+            display: inline-block;
+            background: #e0e0e0;
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .file-btn {
+            flex: 1;
+            min-width: 80px;
+            padding: 8px 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            text-align: center;
+            text-decoration: none;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .file-btn.download-btn {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .file-btn.download-btn:hover {
+            background: #45a049;
+        }
+
+        .file-btn.info-btn {
+            background: #2196F3;
+            color: white;
+        }
+
+        .file-btn.info-btn:hover {
+            background: #1e88e5;
+        }
+
+        .file-btn.copy-btn {
+            background: #FF9800;
+            color: white;
+        }
+
+        .file-btn.copy-btn:hover {
+            background: #fb8c00;
+        }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 30px;
+            flex-wrap: wrap;
+        }
+
+        .page-btn {
+            min-width: 40px;
+            height: 40px;
+            padding: 0 10px;
+            border: none;
+            background: #f0f0f0;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .page-btn:hover {
+            background: #764ba2;
+            color: white;
+        }
+
+        .page-btn.active {
+            background: #764ba2;
+            color: white;
+            font-weight: bold;
+        }
+
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: #666;
+            font-size: 1.2em;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            margin-left: 10px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #764ba2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Modal */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-content h3 {
+            color: #764ba2;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .modal-content p {
+            margin: 10px 0;
+            line-height: 1.6;
+        }
+
+        .modal-content strong {
+            color: #764ba2;
+            min-width: 80px;
+            display: inline-block;
+        }
+
+        .modal-url {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            word-break: break-all;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+            min-width: 120px;
+            color: white;
+        }
+
+        .modal-btn.download {
+            background: #4CAF50;
+        }
+
+        .modal-btn.download:hover {
+            background: #45a049;
+        }
+
+        .modal-btn.copy {
+            background: #2196F3;
+        }
+
+        .modal-btn.copy:hover {
+            background: #1e88e5;
+        }
+
+        .modal-btn.close {
+            background: #f44336;
+        }
+
+        .modal-btn.close:hover {
+            background: #da190b;
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            animation: slideUp 0.3s, fadeOut 0.3s 1.7s forwards;
+            font-weight: 500;
+        }
+
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+                visibility: hidden;
+            }
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            color: white;
+            font-size: 14px;
+        }
+
+        footer a {
+            color: white;
+            text-decoration: none;
+            border-bottom: 1px dotted white;
+        }
+
+        footer a:hover {
+            border-bottom: 1px solid white;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+
+            .stats {
+                gap: 10px;
+            }
+
+            .stats span {
+                width: 100%;
+            }
+
+            .files-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .search-box {
+                width: 100%;
+            }
+            
+            .files-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .file-actions {
+                flex-direction: column;
+            }
+
+            .file-btn {
+                width: 100%;
+            }
+
+            .modal-content {
+                padding: 20px;
+                width: 95%;
+            }
+
+            .modal-actions {
+                flex-direction: column;
+            }
+
+            .modal-btn {
+                width: 100%;
+            }
+        }
+
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            }
+
+            .upload-area, .files-section, .result, header, .modal-content {
+                background: #1e1e2f;
+                color: #fff;
+            }
+
+            h1, .files-header h3, .file-name {
+                color: #a78bfa;
+            }
+
+            .stats span, .file-info, .url-box, .modal-url {
+                background: #2d2d44;
+                color: #ddd;
+            }
+
+            .file-card {
+                background: #2d2d44;
+                border-color: #404060;
+            }
+
+            .file-meta {
+                color: #aaa;
+            }
+
+            .search-box {
+                background: #2d2d44;
+                border-color: #404060;
+                color: white;
+            }
+
+            .search-box::placeholder {
+                color: #888;
+            }
+
+            .page-btn {
+                background: #2d2d44;
+                color: white;
+            }
+
+            .page-btn:hover {
+                background: #764ba2;
+            }
+
+            .url-box input {
+                color: white;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🐱 MyCatBox <span>v2.0</span></h1>
+            <p>Upload dan bagikan file Anda dengan mudah dan gratis! Support file hingga 100MB</p>
+            <div class="stats" id="stats">
+                <span>📊 Loading stats...</span>
+            </div>
+        </header>
+
+        <div class="upload-area" id="dropZone">
+            <div class="upload-icon">📁</div>
+            <h3>Drag & Drop file di sini</h3>
+            <p>atau</p>
+            <button class="upload-btn" id="uploadBtn">Pilih File</button>
+            <input type="file" id="fileInput" style="display: none;">
+            <div class="file-info" id="fileInfo"></div>
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <p style="color: #999; font-size: 12px; margin-top: 10px;">
+                Maksimal 100MB | Support: Gambar, Video, Dokumen, dll
+            </p>
+        </div>
+
+        <div class="result" id="result"></div>
+
+        <div class="files-section">
+            <div class="files-header">
+                <h3>📋 File Terbaru</h3>
+                <input type="text" class="search-box" id="searchBox" placeholder="Cari file... (min 3 karakter)" autocomplete="off">
+            </div>
+            <div id="filesList">
+                <div class="loading">Memuat file...</div>
+            </div>
+            <div class="pagination" id="pagination"></div>
+        </div>
+
+        <footer>
+            <p>© 2024 MyCatBox - Gratis File Upload Service | <a href="#" onclick="showAbout(); return false;">Tentang</a> | <a href="#" onclick="showFAQ(); return false;">FAQ</a> | <a href="#" onclick="testAPIConnection(); return false;">Test Koneksi</a></p>
+        </footer>
+    </div>
+
+    <script>
+        // ==================== KONFIGURASI ====================
+        let currentPage = 1;
+        let totalPages = 1;
+        let searchTimeout;
+        let allFiles = [];
+        let isUploading = false;
+
+        // ==================== TEST API CONNECTION ====================
+        async function testAPIConnection() {
+            try {
+                showNotification('Mengecek koneksi ke server...', 'info');
+                const response = await fetch('/api/test');
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification('✅ Koneksi ke server berhasil!', 'success');
+                    console.log('Server info:', data);
+                } else {
+                    showNotification('❌ Server merespon tapi ada error', 'error');
+                }
+            } catch (error) {
+                console.error('API Test Error:', error);
+                showNotification('❌ Gagal terkoneksi ke server. Pastikan server berjalan.', 'error');
+            }
+        }
+
+        // ==================== LOAD STATS ====================
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const stats = data.stats;
+                    document.getElementById('stats').innerHTML = `
+                        <span>📦 Total File: ${stats.totalFiles}</span>
+                        <span>💾 Total Size: ${formatBytes(stats.totalSize)}</span>
+                        <span>⬇️ Total Downloads: ${stats.totalDownloads}</span>
+                        <span>🔧 Services: ${Object.keys(stats.services || {}).length}</span>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+                document.getElementById('stats').innerHTML = '<span>❌ Gagal memuat stats</span>';
+            }
+        }
+
+        // ==================== LOAD FILES ====================
+        async function loadFiles(page = 1, search = '') {
+            try {
+                document.getElementById('filesList').innerHTML = '<div class="loading">Memuat file...</div>';
+                
+                let url = `/api/files?page=${page}`;
+                if (search && search.length >= 3) {
+                    url += `&search=${encodeURIComponent(search)}`;
+                }
+                
+                console.log('Loading files from:', url);
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.success) {
+                    allFiles = data.files;
+                    displayFiles(data.files);
+                    updatePagination(data.page, data.totalPages);
+                    totalPages = data.totalPages;
+                    currentPage = data.page;
+                } else {
+                    document.getElementById('filesList').innerHTML = '<div class="loading">Error memuat file</div>';
+                }
+            } catch (error) {
+                console.error('Error loading files:', error);
+                document.getElementById('filesList').innerHTML = '<div class="loading">❌ Error memuat file. Periksa koneksi internet Anda.</div>';
+            }
+        }
+
+        // ==================== DISPLAY FILES ====================
+        function displayFiles(files) {
+            const filesList = document.getElementById('filesList');
+            
+            if (files.length === 0) {
+                filesList.innerHTML = '<div class="loading">📭 Belum ada file. Upload file pertama Anda!</div>';
+                return;
+            }
+
+            let html = '<div class="files-grid">';
+            files.forEach(file => {
+                // Tentukan icon berdasarkan tipe file
+                let fileIcon = getFileIcon(file.name);
+                
+                // Format tanggal
+                const uploadDate = new Date(file.uploadDate);
+                const timeAgo = getTimeAgo(uploadDate);
+                
+                html += `
+                    <div class="file-card">
+                        <div class="file-name" title="${escapeHtml(file.name)}">${fileIcon} ${escapeHtml(truncateText(file.name, 40))}</div>
+                        <div class="file-meta">
+                            <span>📦 ${formatBytes(file.size)}</span>
+                            <span>⬇️ ${file.downloads}</span>
+                            <span>🔧 ${file.service || 'unknown'}</span>
+                            <span>📅 ${timeAgo}</span>
+                        </div>
+                        <div class="file-actions">
+                            <a href="${file.url}" target="_blank" class="file-btn download-btn" onclick="trackDownload('${file.id}')">Download</a>
+                            <button class="file-btn info-btn" onclick="showFileInfo('${file.id}')">Info</button>
+                            <button class="file-btn copy-btn" onclick="copyToClipboard('${file.url}')">Copy URL</button>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            filesList.innerHTML = html;
+        }
+
+        // ==================== GET FILE ICON ====================
+        function getFileIcon(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const imageExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
+            const videoExt = ['mp4', 'webm', 'mov', 'avi', 'mkv', 'flv', 'wmv'];
+            const audioExt = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'];
+            const docExt = ['pdf', 'doc', 'docx', 'txt', 'rtf', 'odt', 'xls', 'xlsx', 'ppt', 'pptx'];
+            const archiveExt = ['zip', 'rar', '7z', 'tar', 'gz', 'bz2'];
+            const codeExt = ['js', 'html', 'css', 'php', 'py', 'java', 'cpp', 'c', 'rb', 'go'];
+            
+            if (imageExt.includes(ext)) return '🖼️';
+            if (videoExt.includes(ext)) return '🎬';
+            if (audioExt.includes(ext)) return '🎵';
+            if (docExt.includes(ext)) return '📄';
+            if (archiveExt.includes(ext)) return '🗜️';
+            if (codeExt.includes(ext)) return '💻';
+            return '📁';
+        }
+
+        // ==================== TRUNCATE TEXT ====================
+        function truncateText(text, maxLength) {
+            if (text.length <= maxLength) return text;
+            return text.substr(0, maxLength) + '...';
+        }
+
+        // ==================== GET TIME AGO ====================
+        function getTimeAgo(date) {
+            const seconds = Math.floor((new Date() - date) / 1000);
+            
+            let interval = seconds / 31536000;
+            if (interval > 1) return Math.floor(interval) + ' tahun lalu';
+            
+            interval = seconds / 2592000;
+            if (interval > 1) return Math.floor(interval) + ' bulan lalu';
+            
+            interval = seconds / 86400;
+            if (interval > 1) return Math.floor(interval) + ' hari lalu';
+            
+            interval = seconds / 3600;
+            if (interval > 1) return Math.floor(interval) + ' jam lalu';
+            
+            interval = seconds / 60;
+            if (interval > 1) return Math.floor(interval) + ' menit lalu';
+            
+            return 'baru saja';
+        }
+
+        // ==================== UPDATE PAGINATION ====================
+        function updatePagination(current, total) {
+            const pagination = document.getElementById('pagination');
+            if (total <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+            
+            let html = '';
+            
+            // Tombol Previous
+            if (current > 1) {
+                html += `<button class="page-btn" onclick="changePage(${current - 1})">←</button>`;
+            }
+            
+            // Tombol nomor halaman
+            const maxVisible = 5;
+            let start = Math.max(1, current - Math.floor(maxVisible / 2));
+            let end = Math.min(total, start + maxVisible - 1);
+            
+            if (end - start + 1 < maxVisible) {
+                start = Math.max(1, end - maxVisible + 1);
+            }
+            
+            if (start > 1) {
+                html += `<button class="page-btn" onclick="changePage(1)">1</button>`;
+                if (start > 2) {
+                    html += `<span class="page-btn" style="background: none; cursor: default;">...</span>`;
+                }
+            }
+            
+            for (let i = start; i <= end; i++) {
+                html += `<button class="page-btn ${i === current ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
+            }
+            
+            if (end < total) {
+                if (end < total - 1) {
+                    html += `<span class="page-btn" style="background: none; cursor: default;">...</span>`;
+                }
+                html += `<button class="page-btn" onclick="changePage(${total})">${total}</button>`;
+            }
+            
+            // Tombol Next
+            if (current < total) {
+                html += `<button class="page-btn" onclick="changePage(${current + 1})">→</button>`;
+            }
+            
+            pagination.innerHTML = html;
+        }
+
+        // ==================== CHANGE PAGE ====================
+        function changePage(page) {
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            const search = document.getElementById('searchBox').value;
+            loadFiles(page, search);
+            // Scroll ke atas dengan smooth
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // ==================== TRACK DOWNLOAD ====================
+        async function trackDownload(fileId) {
+            try {
+                await fetch(`/api/files/${fileId}/download`, { method: 'POST' });
+                loadStats();
+                // Update local stats
+                const file = allFiles.find(f => f.id === fileId);
+                if (file) {
+                    file.downloads++;
+                }
+            } catch (error) {
+                console.error('Error tracking download:', error);
+            }
+        }
+
+        // ==================== SHOW FILE INFO ====================
+        async function showFileInfo(fileId) {
+            try {
+                // Cari di local files dulu
+                let file = allFiles.find(f => f.id === fileId);
+                
+                // Jika tidak ada, fetch dari API
+                if (!file) {
+                    const response = await fetch(`/api/files/${fileId}`);
+                    const data = await response.json();
+                    if (data.success) {
+                        file = data.file;
+                    }
+                }
+                
+                if (file) {
+                    showFileModal(file);
+                } else {
+                    showNotification('File tidak ditemukan', 'error');
+                }
+            } catch (error) {
+                console.error('Error getting file info:', error);
+                showNotification('Error mendapatkan info file', 'error');
+            }
+        }
+
+        // ==================== SHOW FILE MODAL ====================
+        function showFileModal(file) {
+            // Remove existing modal
+            const existingModal = document.querySelector('.modal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h3>📋 Detail File</h3>
+                    <p><strong>Nama:</strong> ${escapeHtml(file.name)}</p>
+                    <p><strong>Ukuran:</strong> ${formatBytes(file.size)}</p>
+                    <p><strong>Tipe:</strong> ${file.mimeType || 'Unknown'}</p>
+                    <p><strong>Service:</strong> ${file.service || 'Unknown'}</p>
+                    <p><strong>Upload:</strong> ${new Date(file.uploadDate).toLocaleString('id-ID')}</p>
+                    <p><strong>Downloads:</strong> ${file.downloads}</p>
+                    ${file.expiry ? `<p><strong>Expires:</strong> ${new Date(file.expiry).toLocaleString('id-ID')}</p>` : ''}
+                    <p><strong>URL:</strong></p>
+                    <div class="modal-url">${file.url}</div>
+                    <div class="modal-actions">
+                        <button class="modal-btn download" onclick="window.open('${file.url}')">Download</button>
+                        <button class="modal-btn copy" onclick="copyToClipboard('${file.url}')">Copy URL</button>
+                        <button class="modal-btn close" onclick="this.closest('.modal').remove()">Tutup</button>
+                    </div>
+                </div>
+            `;
+            
+            // Close modal when clicking outside
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+            
+            document.body.appendChild(modal);
+        }
+
+        // ==================== SHOW ABOUT MODAL ====================
+        function showAbout() {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h3>🐱 Tentang MyCatBox</h3>
+                    <p>MyCatBox adalah layanan upload file gratis yang terinspirasi dari Catbox.moe.</p>
+                    <p><strong>Fitur:</strong></p>
+                    <ul style="margin-left: 20px; line-height: 1.8;">
+                        <li>Upload file hingga 100MB</li>
+                        <li>Drag & drop support</li>
+                        <li>Multiple storage service (file.io, GoFile, tmp.ninja, anonfiles)</li>
+                        <li>Statistik realtime</li>
+                        <li>Pencarian file</li>
+                        <li>Dark mode support</li>
+                    </ul>
+                    <p><strong>Version:</strong> 2.0</p>
+                    <p><strong>Dibuat dengan:</strong> Express.js, Multer, Axios</p>
+                    <div class="modal-actions">
+                        <button class="modal-btn close" onclick="this.closest('.modal').remove()">Tutup</button>
+                    </div>
+                </div>
+            `;
+            
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+            
+            document.body.appendChild(modal);
+        }
+
+        // ==================== SHOW FAQ MODAL ====================
+        function showFAQ() {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h3>❓ FAQ</h3>
+                    
+                    <p><strong>Q: Berapa maksimal ukuran file?</strong></p>
+                    <p>A: Maksimal 100MB per file.</p>
+                    
+                    <p><strong>Q: Apakah file saya aman?</strong></p>
+                    <p>A: File Anda diupload ke service pihak ketiga (file.io, GoFile, tmp.ninja, anonfiles). Kami tidak menyimpan file di server kami.</p>
+                    
+                    <p><strong>Q: Berapa lama file disimpan?</strong></p>
+                    <p>A: Tergantung service yang digunakan. file.io: 14 hari atau 1 download. GoFile: selama ada aktivitas. tmp.ninja: 30 hari. anonfiles: 30 hari.</p>
+                    
+                    <p><strong>Q: Apakah bisa upload banyak file sekaligus?</strong></p>
+                    <p>A: Saat ini hanya support 1 file per upload.</p>
+                    
+                    <p><strong>Q: File apa saja yang bisa diupload?</strong></p>
+                    <p>A: Semua jenis file didukung!</p>
+                    
+                    <p><strong>Q: Kok error terus?</strong></p>
+                    <p>A: Coba test koneksi dulu dengan klik "Test Koneksi" di footer. Pastikan server berjalan.</p>
+                    
+                    <div class="modal-actions">
+                        <button class="modal-btn close" onclick="this.closest('.modal').remove()">Tutup</button>
+                    </div>
+                </div>
+            `;
+            
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+            
+            document.body.appendChild(modal);
+        }
+
+        // ==================== FORMAT BYTES ====================
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // ==================== ESCAPE HTML ====================
+        function escapeHtml(unsafe) {
+            if (!unsafe) return '';
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // ==================== UPLOAD FILE ====================
+        async function uploadFile(file) {
+            if (isUploading) {
+                showNotification('Upload sedang berlangsung...', 'warning');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const progressBar = document.getElementById('progressBar');
+            const progressFill = document.getElementById('progressFill');
+            const result = document.getElementById('result');
+            const fileInfo = document.getElementById('fileInfo');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const dropZone = document.getElementById('dropZone');
+
+            isUploading = true;
+            progressBar.style.display = 'block';
+            result.style.display = 'none';
+            progressFill.style.width = '0%';
+            uploadBtn.disabled = true;
+            dropZone.style.opacity = '0.7';
+
+            fileInfo.innerHTML = `
+                <strong>File:</strong> ${escapeHtml(file.name)}<br>
+                <strong>Size:</strong> ${formatBytes(file.size)}<br>
+                <strong>Status:</strong> Memulai upload...
+            `;
+
+            try {
+                const xhr = new XMLHttpRequest();
+                
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percent = (e.loaded / e.total) * 100;
+                        progressFill.style.width = percent + '%';
+                        fileInfo.innerHTML = `
+                            <strong>File:</strong> ${escapeHtml(file.name)}<br>
+                            <strong>Size:</strong> ${formatBytes(file.size)}<br>
+                            <strong>Progress:</strong> ${Math.round(percent)}%<br>
+                            <strong>Uploaded:</strong> ${formatBytes(e.loaded)} / ${formatBytes(e.total)}
+                        `;
+                    }
+                });
+
+                xhr.addEventListener('load', function() {
+                    progressBar.style.display = 'none';
+                    uploadBtn.disabled = false;
+                    dropZone.style.opacity = '1';
+                    isUploading = false;
+                    
+                    try {
+                        console.log('Response status:', xhr.status);
+                        console.log('Response text:', xhr.responseText);
+                        
+                        const data = JSON.parse(xhr.responseText);
+                        
+                        if (xhr.status === 200 && data.success) {
+                            // Pastikan URL ada
+                            if (data.url) {
+                                showSuccess(data);
+                                loadFiles(currentPage);
+                                loadStats();
+                                fileInfo.innerHTML = ''; // Clear file info
+                                fileInput.value = ''; // Reset file input
+                            } else {
+                                showError('Response tidak valid: URL tidak ditemukan');
+                                console.error('Invalid response:', data);
+                            }
+                        } else {
+                            showError(data.error || 'Upload gagal dengan status: ' + xhr.status);
+                        }
+                    } catch (e) {
+                        console.error('Parse error:', e);
+                        showError('Error parsing response: ' + e.message);
+                    }
+                });
+
+                xhr.addEventListener('error', function(e) {
+                    console.error('Network error:', e);
+                    progressBar.style.display = 'none';
+                    uploadBtn.disabled = false;
+                    dropZone.style.opacity = '1';
+                    isUploading = false;
+                    showError('Network error - periksa koneksi internet Anda');
+                    fileInfo.innerHTML = '';
+                });
+
+                xhr.addEventListener('timeout', function() {
+                    progressBar.style.display = 'none';
+                    uploadBtn.disabled = false;
+                    dropZone.style.opacity = '1';
+                    isUploading = false;
+                    showError('Upload timeout - file terlalu besar atau koneksi lambat');
+                    fileInfo.innerHTML = '';
+                });
+
+                xhr.timeout = 300000; // 5 menit timeout
+                xhr.open('POST', '/api/upload');
+                xhr.send(formData);
+            } catch (error) {
+                console.error('Upload error:', error);
+                progressBar.style.display = 'none';
+                uploadBtn.disabled = false;
+                dropZone.style.opacity = '1';
+                isUploading = false;
+                showError('Error: ' + error.message);
+                fileInfo.innerHTML = '';
+            }
+        }
+
+        // ==================== SHOW SUCCESS ====================
+        function showSuccess(data) {
+            const result = document.getElementById('result');
+            result.className = 'result success';
+            result.innerHTML = `
+                <h3>✅ Upload Berhasil!</h3>
+                <p>${data.message || 'File Anda telah diupload menggunakan ' + data.service}</p>
+                <div class="url-box">
+                    <input type="text" value="${data.url}" readonly id="successUrl">
+                    <button class="copy-btn" onclick="copyToClipboard(document.getElementById('successUrl').value)">Copy</button>
+                </div>
+                <div class="action-buttons">
+                    <button class="action-btn open" onclick="window.open('${data.url}')">Buka URL</button>
+                    <button class="action-btn download" onclick="downloadFile('${data.url}', '${data.fileName || 'download'}')">Download File</button>
+                </div>
+                <p style="margin-top: 15px; font-size: 12px; color: #666;">
+                    ID: ${data.fileId || 'N/A'} | Service: ${data.service || 'N/A'} | Size: ${formatBytes(data.fileSize || 0)}
+                </p>
+            `;
+            result.style.display = 'block';
+            
+            // Auto hide after 1 minute
+            setTimeout(() => {
+                if (result.style.display === 'block') {
+                    result.style.opacity = '0.5';
+                }
+            }, 60000);
+        }
+
+        // ==================== SHOW ERROR ====================
+        function showError(message) {
+            const result = document.getElementById('result');
+            result.className = 'result error';
+            result.innerHTML = `
+                <h3>❌ Error!</h3>
+                <p>${message}</p>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="action-btn download" style="background: #4CAF50; flex: 1;" onclick="window.location.reload()">Refresh Halaman</button>
+                    <button class="action-btn open" style="background: #f44336; flex: 1;" onclick="this.parentElement.parentElement.style.display='none'">Tutup</button>
+                </div>
+                <p style="margin-top: 10px; font-size: 12px;">Coba test koneksi dengan klik "Test Koneksi" di footer</p>
+            `;
+            result.style.display = 'block';
+        }
+
+        // ==================== DOWNLOAD FILE ====================
+        function downloadFile(url, filename) {
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename || 'download';
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // ==================== COPY TO CLIPBOARD ====================
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showNotification('✓ URL berhasil dicopy!');
+            }).catch(() => {
+                // Fallback
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showNotification('✓ URL berhasil dicopy!');
+            });
+        }
+
+        // ==================== SHOW NOTIFICATION ====================
+        function showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            
+            if (type === 'error') {
+                notification.style.background = '#f44336';
+            } else if (type === 'warning') {
+                notification.style.background = '#ff9800';
+            } else if (type === 'info') {
+                notification.style.background = '#2196F3';
+            } else {
+                notification.style.background = '#4CAF50';
+            }
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 2000);
+        }
+
+        // ==================== DRAG & DROP HANDLERS ====================
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+
+        // Prevent default drag behaviors
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        // Highlight drop zone
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight() {
+            dropZone.classList.add('dragover');
+        }
+
+        function unhighlight() {
+            dropZone.classList.remove('dragover');
+        }
+
+        // Handle drop
+        dropZone.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const file = dt.files[0];
+            
+            if (file) {
+                handleFile(file);
+            }
+        }
+
+        // Handle file select
+        uploadBtn.addEventListener('click', () => {
+            if (!isUploading) {
+                fileInput.click();
+            } else {
+                showNotification('Upload sedang berlangsung...', 'warning');
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        });
+
+        // Handle file
+        function handleFile(file) {
+            // Validasi ukuran file (100MB max)
+            if (file.size > 100 * 1024 * 1024) {
+                showError('File terlalu besar! Maksimal 100MB');
+                fileInput.value = ''; // Reset input
+                return;
+            }
+            
+            // Validasi tipe file (optional)
+            const fileType = file.type || 'Unknown';
+            const fileName = file.name;
+            
+            document.getElementById('fileInfo').innerHTML = `
+                <strong>File:</strong> ${escapeHtml(fileName)}<br>
+                <strong>Size:</strong> ${formatBytes(file.size)}<br>
+                <strong>Tipe:</strong> ${fileType}<br>
+                <strong>Status:</strong> Siap upload
+            `;
+            
+            uploadFile(file);
+        }
+
+        // ==================== SEARCH WITH DEBOUNCE ====================
+        document.getElementById('searchBox').addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            const searchValue = e.target.value;
+            
+            searchTimeout = setTimeout(() => {
+                if (searchValue.length >= 3 || searchValue.length === 0) {
+                    loadFiles(1, searchValue);
+                }
+            }, 500);
+        });
+
+        // ==================== KEYBOARD SHORTCUTS ====================
+        document.addEventListener('keydown', (e) => {
+            // Ctrl/Cmd + K untuk focus ke search
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                document.getElementById('searchBox').focus();
+            }
+            
+            // Escape untuk close modal
+            if (e.key === 'Escape') {
+                const modal = document.querySelector('.modal');
+                if (modal) {
+                    modal.remove();
+                }
+            }
+        });
+
+        // ==================== INITIAL LOAD ====================
+        window.addEventListener('load', () => {
+            // Test koneksi dulu
+            setTimeout(() => {
+                testAPIConnection();
+            }, 500);
+            
+            loadStats();
+            loadFiles();
+        });
+
+        // ==================== AUTO REFRESH ====================
+        setInterval(() => {
+            loadStats();
+            if (!document.hidden) { // Only refresh if tab is active
+                loadFiles(currentPage, document.getElementById('searchBox').value);
+            }
+        }, 30000);
+
+        // ==================== HANDLE VISIBILITY CHANGE ====================
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                loadStats();
+                loadFiles(currentPage, document.getElementById('searchBox').value);
+            }
+        });
+
+        // ==================== ADD SMOOTH SCROLLING ====================
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+
+        // ==================== ADD ANIMATION ON SCROLL ====================
+        const observerOptions = {
+            threshold: 0.1
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        // Observe file cards after they're loaded
+        function observeFileCards() {
+            document.querySelectorAll('.file-card').forEach(card => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                card.style.transition = 'all 0.5s';
+                observer.observe(card);
+            });
+        }
+
+        // Override displayFiles to observe new cards
+        const originalDisplayFiles = displayFiles;
+        displayFiles = function(files) {
+            originalDisplayFiles(files);
+            setTimeout(observeFileCards, 100);
+        };
+    </script>
+</body>
+</html>
