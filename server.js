@@ -18,7 +18,7 @@ const PORT = process.env.PORT || 3000;
 // Konfigurasi dengan cloud name yang benar: deswvfe4w
 cloudinary.config({
   cloud_name: 'deswvfe4w',
-  api_key: '951531676243719',
+  api_key: '649231255323586',
   api_secret: 'gh_1AgpnF_jL7ldBRhanMrgxAM',
   secure: true
 });
