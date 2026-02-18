@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000;
 
 // ==================== CLOUDINARY CONFIGURATION ====================
 cloudinary.config({
-  cloud_name: 'dwbi7zfjl', // Biasanya format: dwbi7zfjl atau sesuai akun
+  cloud_name: 'deswvfe4w', // Biasanya format: dwbi7zfjl atau sesuai akun
   api_key: '951531676243719',
   api_secret: '951531676243719',
   secure: true
