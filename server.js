@@ -1,5 +1,6 @@
 // server.js - File Upload Service Mirip Catbox
 // Support untuk Vercel (menggunakan API eksternal untuk penyimpanan)
+// Menggunakan tmpfiles.org sebagai service utama
 
 const express = require('express');
 const multer = require('multer');
@@ -31,25 +32,21 @@ const upload = multer({
 
 // API Keys untuk berbagai service penyimpanan
 const STORAGE_SERVICES = {
-    FILE_IO: {
+    TMPFILES: {
         enabled: true,
-        uploadUrl: 'https://file.io',
-        maxSize: 100 * 1024 * 1024 // 100MB
+        uploadUrl: 'https://tmpfiles.org/api/v1/upload',
+        maxSize: 100 * 1024 * 1024, // 100MB
+        description: 'File otomatis dihapus setelah 60 menit'
     },
     GOFILE: {
         enabled: true,
         serverUrl: 'https://api.gofile.io/getServer',
         uploadUrl: 'https://{server}.gofile.io/uploadFile'
     },
-    TEMP_SH: {
+    TEMP_NINJA: {
         enabled: true,
         uploadUrl: 'https://tmp.ninja/api.php?d=upload',
         maxSize: 500 * 1024 * 1024 // 500MB
-    },
-    ANONFILES: {
-        enabled: true,
-        uploadUrl: 'https://api.anonfiles.com/upload',
-        maxSize: 100 * 1024 * 1024 // 100MB
     }
 };
 
@@ -61,7 +58,73 @@ function generateUniqueId() {
     return crypto.randomBytes(8).toString('hex');
 }
 
-// Fungsi untuk mendapatkan server GoFile yang tersedia
+// ==================== TMPFILES.ORG SERVICE ====================
+async function uploadToTmpFiles(fileBuffer, fileName, mimeType) {
+    try {
+        console.log('📤 Mencoba upload ke tmpfiles.org...');
+        
+        const formData = new FormData();
+        formData.append('file', fileBuffer, {
+            filename: fileName,
+            contentType: mimeType
+        });
+
+        const response = await axios.post('https://tmpfiles.org/api/v1/upload', formData, {
+            headers: {
+                ...formData.getHeaders()
+            },
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
+        });
+
+        console.log('✅ Response tmpfiles.org:', response.data);
+
+        // Response dari tmpfiles.org:
+        // {
+        //   "success": true,
+        //   "data": {
+        //     "url": "https://tmpfiles.org/123456/filename.jpg"
+        //   }
+        // }
+
+        if (response.data && response.data.success) {
+            // Generate ID lokal untuk file
+            const fileId = generateUniqueId();
+            
+            // Ambil URL dari response
+            let fileUrl = response.data.data.url;
+            
+            // tmpfiles.org juga menyediakan direct download URL
+            // Format: https://tmpfiles.org/dl/123456/filename.jpg
+            const directUrl = fileUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+            
+            // Set expiry 60 menit dari sekarang
+            const expiry = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+            
+            console.log('✅ Upload berhasil ke tmpfiles.org:', fileUrl);
+            
+            return {
+                success: true,
+                url: fileUrl,
+                directUrl: directUrl,
+                fileId: fileId,
+                service: 'tmpfiles.org',
+                expiry: expiry,
+                message: 'File akan otomatis dihapus setelah 60 menit'
+            };
+        } else {
+            throw new Error(response.data?.error || 'Upload gagal ke tmpfiles.org');
+        }
+    } catch (error) {
+        console.error('❌ Error uploading to tmpfiles.org:', error.response?.data || error.message);
+        return {
+            success: false,
+            error: error.response?.data?.error || error.message
+        };
+    }
+}
+
+// ==================== GOFILE SERVICE ====================
 async function getGoFileServer() {
     try {
         const response = await axios.get('https://api.gofile.io/getServer');
@@ -72,46 +135,10 @@ async function getGoFileServer() {
     }
 }
 
-// Fungsi untuk upload ke file.io
-async function uploadToFileIO(fileBuffer, fileName, mimeType) {
-    try {
-        const formData = new FormData();
-        formData.append('file', fileBuffer, {
-            filename: fileName,
-            contentType: mimeType
-        });
-
-        const response = await axios.post('https://file.io', formData, {
-            headers: {
-                ...formData.getHeaders()
-            },
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity
-        });
-
-        // Generate ID lokal untuk file
-        const fileId = generateUniqueId();
-
-        return {
-            success: true,
-            url: response.data.link,
-            fileId: fileId,
-            expiry: response.data.expires,
-            service: 'file.io',
-            directUrl: response.data.link
-        };
-    } catch (error) {
-        console.error('Error uploading to file.io:', error);
-        return {
-            success: false,
-            error: error.message
-        };
-    }
-}
-
-// Fungsi untuk upload ke GoFile
 async function uploadToGoFile(fileBuffer, fileName, mimeType) {
     try {
+        console.log('📤 Mencoba upload ke GoFile...');
+        
         // Dapatkan server yang tersedia
         const server = await getGoFileServer();
         if (!server) {
@@ -138,18 +165,22 @@ async function uploadToGoFile(fileBuffer, fileName, mimeType) {
             // Generate ID lokal untuk file
             const fileId = generateUniqueId();
             
+            const fileUrl = `https://${server}.gofile.io/download/${response.data.data.fileId}/${fileName}`;
+            
+            console.log('✅ Upload berhasil ke GoFile:', fileUrl);
+            
             return {
                 success: true,
-                url: `https://${server}.gofile.io/download/${response.data.data.fileId}/${fileName}`,
+                url: fileUrl,
                 fileId: fileId,
                 service: 'gofile',
-                directUrl: `https://${server}.gofile.io/download/${response.data.data.fileId}/${fileName}`
+                directUrl: fileUrl
             };
         } else {
             throw new Error(response.data.message || 'Upload gagal');
         }
     } catch (error) {
-        console.error('Error uploading to GoFile:', error);
+        console.error('❌ Error uploading to GoFile:', error);
         return {
             success: false,
             error: error.message
@@ -157,9 +188,11 @@ async function uploadToGoFile(fileBuffer, fileName, mimeType) {
     }
 }
 
-// Fungsi untuk upload ke temp.sh (tmp.ninja)
-async function uploadToTempSH(fileBuffer, fileName, mimeType) {
+// ==================== TEMP.NINJA SERVICE ====================
+async function uploadToTempNinja(fileBuffer, fileName, mimeType) {
     try {
+        console.log('📤 Mencoba upload ke tmp.ninja...');
+        
         const formData = new FormData();
         formData.append('file', fileBuffer, {
             filename: fileName,
@@ -179,6 +212,8 @@ async function uploadToTempSH(fileBuffer, fileName, mimeType) {
         
         // Generate ID lokal untuk file
         const fileId = generateUniqueId();
+        
+        console.log('✅ Upload berhasil ke tmp.ninja:', fileUrl);
 
         return {
             success: true,
@@ -188,7 +223,7 @@ async function uploadToTempSH(fileBuffer, fileName, mimeType) {
             directUrl: fileUrl
         };
     } catch (error) {
-        console.error('Error uploading to tmp.ninja:', error);
+        console.error('❌ Error uploading to tmp.ninja:', error);
         return {
             success: false,
             error: error.message
@@ -196,54 +231,13 @@ async function uploadToTempSH(fileBuffer, fileName, mimeType) {
     }
 }
 
-// Fungsi untuk upload ke AnonFiles
-async function uploadToAnonFiles(fileBuffer, fileName, mimeType) {
-    try {
-        const formData = new FormData();
-        formData.append('file', fileBuffer, {
-            filename: fileName,
-            contentType: mimeType
-        });
-
-        const response = await axios.post('https://api.anonfiles.com/upload', formData, {
-            headers: {
-                ...formData.getHeaders()
-            },
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity
-        });
-
-        if (response.data.status) {
-            // Generate ID lokal untuk file
-            const fileId = generateUniqueId();
-            
-            return {
-                success: true,
-                url: response.data.data.file.url.full,
-                fileId: fileId,
-                service: 'anonfiles',
-                directUrl: response.data.data.file.url.full
-            };
-        } else {
-            throw new Error(response.data.error.message || 'Upload gagal');
-        }
-    } catch (error) {
-        console.error('Error uploading to AnonFiles:', error);
-        return {
-            success: false,
-            error: error.message
-        };
-    }
-}
-
-// API Routes - Harus di atas route static
-// Endpoint untuk upload file
+// ==================== UPLOAD ENDPOINT ====================
 app.post('/api/upload', upload.single('file'), async (req, res) => {
-    console.log('Upload endpoint dipanggil');
+    console.log('📢 Upload endpoint dipanggil');
     
     try {
         if (!req.file) {
-            console.log('Tidak ada file');
+            console.log('❌ Tidak ada file');
             return res.status(400).json({
                 success: false,
                 error: 'Tidak ada file yang diupload'
@@ -256,7 +250,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
         const fileSize = file.size;
         const mimeType = file.mimetype;
 
-        console.log(`Menerima file: ${fileName}, size: ${fileSize} bytes`);
+        console.log(`📁 Menerima file: ${fileName}, size: ${fileSize} bytes`);
 
         // Validasi ukuran file
         if (fileSize > 100 * 1024 * 1024) {
@@ -269,63 +263,43 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
         let uploadResult = null;
         let errors = [];
 
-        // Coba upload ke file.io terlebih dahulu
-        if (STORAGE_SERVICES.FILE_IO.enabled) {
-            console.log('Mencoba upload ke file.io...');
-            uploadResult = await uploadToFileIO(fileBuffer, fileName, mimeType);
+        // PRIORITAS 1: Coba upload ke tmpfiles.org (paling stabil)
+        if (STORAGE_SERVICES.TMPFILES.enabled) {
+            uploadResult = await uploadToTmpFiles(fileBuffer, fileName, mimeType);
             if (uploadResult.success) {
-                console.log('Upload berhasil ke file.io');
+                console.log('✅ Upload berhasil ke tmpfiles.org');
             } else {
-                errors.push(`file.io: ${uploadResult.error}`);
-                console.log('file.io gagal:', uploadResult.error);
+                errors.push(`tmpfiles.org: ${uploadResult.error}`);
             }
         }
 
-        // Jika file.io gagal, coba GoFile
+        // PRIORITAS 2: Jika tmpfiles.org gagal, coba GoFile
         if (!uploadResult || !uploadResult.success) {
             if (STORAGE_SERVICES.GOFILE.enabled) {
-                console.log('Mencoba upload ke GoFile...');
                 uploadResult = await uploadToGoFile(fileBuffer, fileName, mimeType);
                 if (uploadResult.success) {
-                    console.log('Upload berhasil ke GoFile');
+                    console.log('✅ Upload berhasil ke GoFile');
                 } else {
                     errors.push(`GoFile: ${uploadResult.error}`);
-                    console.log('GoFile gagal:', uploadResult.error);
                 }
             }
         }
 
-        // Jika GoFile gagal, coba tmp.ninja
+        // PRIORITAS 3: Jika GoFile gagal, coba tmp.ninja
         if (!uploadResult || !uploadResult.success) {
-            if (STORAGE_SERVICES.TEMP_SH.enabled) {
-                console.log('Mencoba upload ke tmp.ninja...');
-                uploadResult = await uploadToTempSH(fileBuffer, fileName, mimeType);
+            if (STORAGE_SERVICES.TEMP_NINJA.enabled) {
+                uploadResult = await uploadToTempNinja(fileBuffer, fileName, mimeType);
                 if (uploadResult.success) {
-                    console.log('Upload berhasil ke tmp.ninja');
+                    console.log('✅ Upload berhasil ke tmp.ninja');
                 } else {
                     errors.push(`tmp.ninja: ${uploadResult.error}`);
-                    console.log('tmp.ninja gagal:', uploadResult.error);
-                }
-            }
-        }
-
-        // Jika tmp.ninja gagal, coba AnonFiles
-        if (!uploadResult || !uploadResult.success) {
-            if (STORAGE_SERVICES.ANONFILES.enabled) {
-                console.log('Mencoba upload ke AnonFiles...');
-                uploadResult = await uploadToAnonFiles(fileBuffer, fileName, mimeType);
-                if (uploadResult.success) {
-                    console.log('Upload berhasil ke AnonFiles');
-                } else {
-                    errors.push(`AnonFiles: ${uploadResult.error}`);
-                    console.log('AnonFiles gagal:', uploadResult.error);
                 }
             }
         }
 
         // Jika semua service gagal
         if (!uploadResult || !uploadResult.success) {
-            console.log('Semua service gagal:', errors);
+            console.log('❌ Semua service gagal:', errors);
             return res.status(500).json({
                 success: false,
                 error: 'Semua service penyimpanan sedang sibuk. Silakan coba lagi nanti.',
@@ -348,9 +322,9 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
         };
 
         fileDatabase.push(fileData);
-        console.log(`File tersimpan di database. Total: ${fileDatabase.length}`);
+        console.log(`✅ File tersimpan di database. Total: ${fileDatabase.length}`);
 
-        // Kirim response dengan format yang konsisten
+        // Kirim response
         res.json({
             success: true,
             url: uploadResult.url,
@@ -359,11 +333,12 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
             service: uploadResult.service,
             fileName: fileName,
             fileSize: fileSize,
-            message: `File berhasil diupload menggunakan ${uploadResult.service}`
+            expiry: uploadResult.expiry,
+            message: `File berhasil diupload menggunakan ${uploadResult.service}${uploadResult.expiry ? ' (berlaku 60 menit)' : ''}`
         });
 
     } catch (error) {
-        console.error('Upload error:', error);
+        console.error('❌ Upload error:', error);
         res.status(500).json({
             success: false,
             error: 'Terjadi kesalahan saat upload file: ' + error.message
@@ -371,9 +346,9 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     }
 });
 
-// Endpoint untuk mendapatkan daftar file (dengan pagination)
+// ==================== GET FILES ====================
 app.get('/api/files', (req, res) => {
-    console.log('Files endpoint dipanggil');
+    console.log('📢 Files endpoint dipanggil');
     
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
@@ -403,7 +378,8 @@ app.get('/api/files', (req, res) => {
         size: file.size,
         service: file.service,
         uploadDate: file.uploadDate,
-        downloads: file.downloads
+        downloads: file.downloads,
+        expiry: file.expiry
     }));
 
     res.json({
@@ -416,9 +392,9 @@ app.get('/api/files', (req, res) => {
     });
 });
 
-// Endpoint untuk mendapatkan informasi file
+// ==================== GET FILE INFO ====================
 app.get('/api/files/:id', (req, res) => {
-    console.log('File info endpoint dipanggil untuk ID:', req.params.id);
+    console.log('📢 File info endpoint dipanggil untuk ID:', req.params.id);
     
     const file = fileDatabase.find(f => f.id === req.params.id);
     
@@ -446,9 +422,9 @@ app.get('/api/files/:id', (req, res) => {
     });
 });
 
-// Endpoint untuk statistik
+// ==================== GET STATS ====================
 app.get('/api/stats', (req, res) => {
-    console.log('Stats endpoint dipanggil');
+    console.log('📢 Stats endpoint dipanggil');
     
     const totalFiles = fileDatabase.length;
     const totalSize = fileDatabase.reduce((acc, file) => acc + file.size, 0);
@@ -478,7 +454,26 @@ app.get('/api/stats', (req, res) => {
     });
 });
 
-// Endpoint untuk menghapus file dari database (hanya metadata)
+// ==================== TRACK DOWNLOAD ====================
+app.post('/api/files/:id/download', (req, res) => {
+    const file = fileDatabase.find(f => f.id === req.params.id);
+    
+    if (!file) {
+        return res.status(404).json({
+            success: false,
+            error: 'File tidak ditemukan'
+        });
+    }
+
+    file.downloads += 1;
+
+    res.json({
+        success: true,
+        downloads: file.downloads
+    });
+});
+
+// ==================== DELETE FILE ====================
 app.delete('/api/files/:id', (req, res) => {
     const index = fileDatabase.findIndex(f => f.id === req.params.id);
     
@@ -502,45 +497,46 @@ app.delete('/api/files/:id', (req, res) => {
     });
 });
 
-// Endpoint untuk update download count
-app.post('/api/files/:id/download', (req, res) => {
-    const file = fileDatabase.find(f => f.id === req.params.id);
-    
-    if (!file) {
-        return res.status(404).json({
-            success: false,
-            error: 'File tidak ditemukan'
-        });
-    }
-
-    file.downloads += 1;
-
-    res.json({
-        success: true,
-        downloads: file.downloads
-    });
-});
-
-// Endpoint untuk health check
+// ==================== HEALTH CHECK ====================
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'OK',
         timestamp: new Date().toISOString(),
         files: fileDatabase.length,
-        memory: process.memoryUsage()
+        memory: process.memoryUsage(),
+        services: Object.keys(STORAGE_SERVICES).filter(s => STORAGE_SERVICES[s].enabled)
     });
 });
 
-// Test endpoint untuk memastikan API bekerja
+// ==================== TEST ENDPOINT ====================
 app.get('/api/test', (req, res) => {
     res.json({
         success: true,
         message: 'API berjalan dengan baik',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        services: Object.keys(STORAGE_SERVICES).filter(s => STORAGE_SERVICES[s].enabled)
     });
 });
 
-// Route untuk halaman utama - HARUS DIBAWAH API ROUTES
+// ==================== CLEANUP EXPIRED FILES ====================
+setInterval(() => {
+    const now = new Date();
+    const beforeCount = fileDatabase.length;
+    
+    fileDatabase = fileDatabase.filter(file => {
+        if (file.expiry) {
+            return new Date(file.expiry) > now;
+        }
+        return true; // File tanpa expiry tetap disimpan
+    });
+    
+    const afterCount = fileDatabase.length;
+    if (beforeCount !== afterCount) {
+        console.log(`🧹 Cleanup: ${beforeCount - afterCount} file expired dihapus dari database`);
+    }
+}, 60000); // Cek setiap 1 menit
+
+// ==================== ROUTES ====================
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -553,23 +549,21 @@ app.use('/api/*', (req, res) => {
     });
 });
 
-// Handle 404 untuk routes lain (redirect ke index.html untuk SPA)
+// Handle 404 untuk routes lain
 app.use((req, res) => {
-    // Jika request ke API, return JSON
     if (req.path.startsWith('/api/')) {
         res.status(404).json({
             success: false,
             error: 'Endpoint tidak ditemukan'
         });
     } else {
-        // Jika request ke halaman, return index.html
         res.sendFile(path.join(__dirname, 'public', 'index.html'));
     }
 });
 
 // Error handler
 app.use((err, req, res, next) => {
-    console.error('Error:', err.stack);
+    console.error('❌ Error:', err.stack);
     
     if (req.path.startsWith('/api/')) {
         res.status(500).json({
@@ -581,12 +575,13 @@ app.use((err, req, res, next) => {
     }
 });
 
-// Start server jika tidak di Vercel
+// ==================== START SERVER ====================
 if (require.main === module) {
     app.listen(PORT, () => {
-        console.log(`Server berjalan di http://localhost:${PORT}`);
-        console.log(`Mode: ${process.env.VERCEL ? 'Vercel' : 'Local'}`);
-        console.log(`API tersedia di http://localhost:${PORT}/api/test`);
+        console.log(`\n🚀 Server berjalan di http://localhost:${PORT}`);
+        console.log(`📡 Mode: ${process.env.VERCEL ? 'Vercel' : 'Local'}`);
+        console.log(`🔧 Service aktif: ${Object.keys(STORAGE_SERVICES).filter(s => STORAGE_SERVICES[s].enabled).join(', ')}`);
+        console.log(`📝 Test API: http://localhost:${PORT}/api/test\n`);
     });
 }
 
