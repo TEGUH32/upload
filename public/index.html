@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyCatBox - File Upload Service</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            color: #764ba2;
+            margin-bottom: 10px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .upload-area {
+            background: white;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            border: 3px dashed #764ba2;
+            transition: all 0.3s;
+        }
+
+        .upload-area.dragover {
+            background: #f0f0ff;
+            border-color: #667eea;
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            color: #764ba2;
+            margin-bottom: 20px;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 25px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: transform 0.3s;
+            margin: 20px 0;
+        }
+
+        .upload-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .file-info {
+            color: #666;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .result {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: none;
+        }
+
+        .result.success {
+            border-left: 5px solid #4CAF50;
+        }
+
+        .result.error {
+            border-left: 5px solid #f44336;
+        }
+
+        .url-box {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .url-box input {
+            background: transparent;
+            border: none;
+            flex: 1;
+            font-size: 16px;
+            outline: none;
+        }
+
+        .copy-btn {
+            background: #764ba2;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .files-section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .files-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .search-box {
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            width: 300px;
+            font-size: 16px;
+        }
+
+        .files-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .file-card {
+            background: #f9f9f9;
+            border-radius: 8px;
+            padding: 15px;
+            transition: transform 0.3s;
+            border: 1px solid #e0e0e0;
+        }
+
+        .file-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .file-name {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #764ba2;
+            word-break: break-all;
+        }
+
+        .file-meta {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 10px;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .file-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            text-align: center;
+            text-decoration: none;
+        }
+
+        .download-btn {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .info-btn {
+            background: #2196F3;
+            color: white;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .page-btn {
+            padding: 8px 15px;
+            border: none;
+            background: #f0f0f0;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .page-btn.active {
+            background: #764ba2;
+            color: white;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .files-header {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .search-box {
+                width: 100%;
+            }
+            
+            .files-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🐱 MyCatBox</h1>
+            <p>Upload dan bagikan file Anda dengan mudah dan gratis!</p>
+            <div class="stats" id="stats">
+                <span>📊 Loading stats...</span>
+            </div>
+        </header>
+
+        <div class="upload-area" id="dropZone">
+            <div class="upload-icon">📁</div>
+            <h3>Drag & Drop file di sini</h3>
+            <p>atau</p>
+            <button class="upload-btn" id="uploadBtn">Pilih File</button>
+            <input type="file" id="fileInput" style="display: none;">
+            <div class="file-info" id="fileInfo"></div>
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+
+        <div class="result" id="result"></div>
+
+        <div class="files-section">
+            <div class="files-header">
+                <h3>📋 File Terbaru</h3>
+                <input type="text" class="search-box" id="searchBox" placeholder="Cari file...">
+            </div>
+            <div id="filesList">
+                <div class="loading">Memuat file...</div>
+            </div>
+            <div class="pagination" id="pagination"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 1;
+        let totalPages = 1;
+        let searchTimeout;
+
+        // Load stats
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                if (data.success) {
+                    const stats = data.stats;
+                    document.getElementById('stats').innerHTML = `
+                        <span>📦 Total File: ${stats.totalFiles}</span>
+                        <span>💾 Total Size: ${formatBytes(stats.totalSize)}</span>
+                        <span>⬇️ Total Downloads: ${stats.totalDownloads}</span>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        // Load files
+        async function loadFiles(page = 1, search = '') {
+            try {
+                let url = `/api/files?page=${page}`;
+                if (search) {
+                    url += `&search=${encodeURIComponent(search)}`;
+                }
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayFiles(data.files);
+                    updatePagination(data.page, data.totalPages);
+                    totalPages = data.totalPages;
+                }
+            } catch (error) {
+                console.error('Error loading files:', error);
+                document.getElementById('filesList').innerHTML = '<div class="loading">Error memuat file</div>';
+            }
+        }
+
+        // Display files
+        function displayFiles(files) {
+            const filesList = document.getElementById('filesList');
+            
+            if (files.length === 0) {
+                filesList.innerHTML = '<div class="loading">Belum ada file</div>';
+                return;
+            }
+
+            let html = '<div class="files-grid">';
+            files.forEach(file => {
+                html += `
+                    <div class="file-card">
+                        <div class="file-name">${escapeHtml(file.name)}</div>
+                        <div class="file-meta">
+                            📦 ${formatBytes(file.size)}<br>
+                            📅 ${new Date(file.uploadDate).toLocaleDateString()}<br>
+                            ⬇️ ${file.downloads} downloads
+                        </div>
+                        <div class="file-actions">
+                            <a href="${file.url}" target="_blank" class="file-btn download-btn" onclick="trackDownload('${file.id}')">Download</a>
+                            <button class="file-btn info-btn" onclick="showFileInfo('${file.id}')">Info</button>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            filesList.innerHTML = html;
+        }
+
+        // Update pagination
+        function updatePagination(current, total) {
+            const pagination = document.getElementById('pagination');
+            let html = '';
+            
+            for (let i = 1; i <= total; i++) {
+                html += `<button class="page-btn ${i === current ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
+            }
+            
+            pagination.innerHTML = html;
+        }
+
+        // Change page
+        function changePage(page) {
+            currentPage = page;
+            const search = document.getElementById('searchBox').value;
+            loadFiles(page, search);
+        }
+
+        // Track download
+        async function trackDownload(fileId) {
+            try {
+                await fetch(`/api/files/${fileId}/download`, { method: 'POST' });
+                loadStats();
+            } catch (error) {
+                console.error('Error tracking download:', error);
+            }
+        }
+
+        // Show file info
+        async function showFileInfo(fileId) {
+            try {
+                const response = await fetch(`/api/files/${fileId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const file = data.file;
+                    alert(`
+                        Nama: ${file.name}
+                        URL: ${file.url}
+                        Ukuran: ${formatBytes(file.size)}
+                        Tipe: ${file.mimeType}
+                        Service: ${file.service}
+                        Upload: ${new Date(file.uploadDate).toLocaleString()}
+                        Downloads: ${file.downloads}
+                    `);
+                }
+            } catch (error) {
+                console.error('Error getting file info:', error);
+            }
+        }
+
+        // Format bytes
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Escape HTML
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Upload file
+        async function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const progressBar = document.getElementById('progressBar');
+            const progressFill = document.getElementById('progressFill');
+            const result = document.getElementById('result');
+
+            progressBar.style.display = 'block';
+            result.style.display = 'none';
+
+            try {
+                const xhr = new XMLHttpRequest();
+                
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percent = (e.loaded / e.total) * 100;
+                        progressFill.style.width = percent + '%';
+                    }
+                });
+
+                xhr.addEventListener('load', () => {
+                    progressBar.style.display = 'none';
+                    
+                    if (xhr.status === 200) {
+                        const data = JSON.parse(xhr.responseText);
+                        if (data.success) {
+                            showSuccess(data);
+                            loadFiles(currentPage);
+                            loadStats();
+                        } else {
+                            showError(data.error || 'Upload gagal');
+                        }
+                    } else {
+                        showError('Error uploading file');
+                    }
+                });
+
+                xhr.addEventListener('error', () => {
+                    progressBar.style.display = 'none';
+                    showError('Network error');
+                });
+
+                xhr.open('POST', '/api/upload');
+                xhr.send(formData);
+            } catch (error) {
+                progressBar.style.display = 'none';
+                showError(error.message);
+            }
+        }
+
+        // Show success
+        function showSuccess(data) {
+            const result = document.getElementById('result');
+            result.className = 'result success';
+            result.innerHTML = `
+                <h3>✅ Upload Berhasil!</h3>
+                <p>File Anda telah diupload menggunakan service: ${data.service}</p>
+                <div class="url-box">
+                    <input type="text" value="${data.url}" readonly>
+                    <button class="copy-btn" onclick="copyToClipboard('${data.url}')">Copy</button>
+                </div>
+                <p>ID File: ${data.fileId}</p>
+            `;
+            result.style.display = 'block';
+        }
+
+        // Show error
+        function showError(message) {
+            const result = document.getElementById('result');
+            result.className = 'result error';
+            result.innerHTML = `
+                <h3>❌ Error!</h3>
+                <p>${message}</p>
+            `;
+            result.style.display = 'block';
+        }
+
+        // Copy to clipboard
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('URL berhasil dicopy!');
+            });
+        }
+
+        // Drag & drop handlers
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                document.getElementById('fileInfo').textContent = `File: ${file.name} (${formatBytes(file.size)})`;
+                uploadFile(file);
+            }
+        });
+
+        uploadBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files[0];
+            if (file) {
+                document.getElementById('fileInfo').textContent = `File: ${file.name} (${formatBytes(file.size)})`;
+                uploadFile(file);
+            }
+        });
+
+        // Search with debounce
+        document.getElementById('searchBox').addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                loadFiles(1, e.target.value);
+            }, 500);
+        });
+
+        // Initial load
+        loadStats();
+        loadFiles();
+
+        // Auto refresh stats every 30 seconds
+        setInterval(loadStats, 30000);
+    </script>
+</body>
+</html>
