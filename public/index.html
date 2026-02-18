@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyCatBox - File Upload Service (tmpfiles.org)</title>
+    <title>MyCatBox - Cloudinary File Upload</title>
     <style>
         * {
             margin: 0;
@@ -60,6 +60,20 @@
             display: inline-flex;
             align-items: center;
             gap: 5px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+
+        .badge.cloudinary {
+            background: #3448C5;
+            color: white;
         }
 
         /* Upload Area */
@@ -153,6 +167,11 @@
             font-size: 14px;
         }
 
+        .info-box.cloudinary {
+            background: #e8eaf6;
+            border-left-color: #3448C5;
+        }
+
         .info-box.warning {
             background: #fff3e0;
             border-left-color: #ff9800;
@@ -216,10 +235,12 @@
             display: flex;
             gap: 10px;
             margin-top: 15px;
+            flex-wrap: wrap;
         }
 
         .action-btn {
             flex: 1;
+            min-width: 120px;
             padding: 12px;
             border: none;
             border-radius: 5px;
@@ -244,6 +265,14 @@
 
         .action-btn.download:hover {
             background: #1e88e5;
+        }
+
+        .action-btn.transform {
+            background: #FF9800;
+        }
+
+        .action-btn.transform:hover {
+            background: #fb8c00;
         }
 
         /* Files Section */
@@ -308,10 +337,6 @@
             border-color: #764ba2;
         }
 
-        .file-card.expiring {
-            border-left: 3px solid #ff9800;
-        }
-
         .file-card::before {
             content: '';
             position: absolute;
@@ -326,6 +351,15 @@
 
         .file-card:hover::before {
             transform: scaleX(1);
+        }
+
+        .file-thumbnail {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            background: #f0f0f0;
         }
 
         .file-name {
@@ -353,8 +387,8 @@
             margin-bottom: 5px;
         }
 
-        .file-meta .expiry-badge {
-            background: #ff9800;
+        .file-meta .cloudinary-badge {
+            background: #3448C5;
             color: white;
         }
 
@@ -366,7 +400,7 @@
 
         .file-btn {
             flex: 1;
-            min-width: 80px;
+            min-width: 70px;
             padding: 8px 5px;
             border: none;
             border-radius: 5px;
@@ -403,6 +437,15 @@
 
         .file-btn.copy-btn:hover {
             background: #fb8c00;
+        }
+
+        .file-btn.transform-btn {
+            background: #9C27B0;
+            color: white;
+        }
+
+        .file-btn.transform-btn:hover {
+            background: #7b1fa2;
         }
 
         /* Pagination */
@@ -491,7 +534,7 @@
             background: white;
             padding: 30px;
             border-radius: 10px;
-            max-width: 500px;
+            max-width: 600px;
             width: 90%;
             max-height: 80vh;
             overflow-y: auto;
@@ -522,8 +565,16 @@
 
         .modal-content strong {
             color: #764ba2;
-            min-width: 80px;
+            min-width: 100px;
             display: inline-block;
+        }
+
+        .modal-preview {
+            max-width: 100%;
+            max-height: 200px;
+            margin: 15px 0;
+            border-radius: 5px;
+            border: 1px solid #e0e0e0;
         }
 
         .modal-url {
@@ -571,12 +622,60 @@
             background: #1e88e5;
         }
 
+        .modal-btn.transform {
+            background: #FF9800;
+        }
+
+        .modal-btn.transform:hover {
+            background: #fb8c00;
+        }
+
         .modal-btn.close {
             background: #f44336;
         }
 
         .modal-btn.close:hover {
             background: #da190b;
+        }
+
+        /* Transform Panel */
+        .transform-panel {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 5px;
+        }
+
+        .transform-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .transform-row label {
+            min-width: 80px;
+            font-weight: bold;
+            color: #764ba2;
+        }
+
+        .transform-row input, .transform-row select {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .transform-preview {
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .transform-preview img {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
         }
 
         /* Notification */
@@ -731,21 +830,25 @@
                 background: #1e3a5f;
                 color: #fff;
             }
+
+            .transform-panel {
+                background: #2d2d44;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🐱 MyCatBox <span>tmpfiles.org</span></h1>
-            <p>Upload dan bagikan file Anda dengan mudah! File otomatis dihapus setelah 60 menit.</p>
+            <h1>🐱 MyCatBox <span>Cloudinary</span></h1>
+            <p>Upload file ke Cloudinary - Gratis, Cepat, dan Permanen!</p>
             <div class="stats" id="stats">
                 <span>📊 Loading stats...</span>
             </div>
         </header>
 
         <div class="upload-area" id="dropZone">
-            <div class="upload-icon">📁</div>
+            <div class="upload-icon">☁️</div>
             <h3>Drag & Drop file di sini</h3>
             <p>atau</p>
             <button class="upload-btn" id="uploadBtn">Pilih File</button>
@@ -754,8 +857,8 @@
             <div class="progress-bar" id="progressBar">
                 <div class="progress-fill" id="progressFill"></div>
             </div>
-            <div class="info-box warning">
-                <strong>⏰ Informasi:</strong> File akan otomatis dihapus setelah 60 menit. Maksimal ukuran file 100MB.
+            <div class="info-box cloudinary">
+                <strong>☁️ Cloudinary Storage:</strong> File disimpan permanen, bisa diresize, transformasi, dan CDN global. Maksimal 100MB.
             </div>
         </div>
 
@@ -763,7 +866,7 @@
 
         <div class="files-section">
             <div class="files-header">
-                <h3>📋 File Terbaru</h3>
+                <h3>📋 File Tersimpan</h3>
                 <input type="text" class="search-box" id="searchBox" placeholder="Cari file... (min 3 karakter)" autocomplete="off">
             </div>
             <div id="filesList">
@@ -774,9 +877,9 @@
 
         <footer>
             <p>
-                © 2024 MyCatBox - Powered by tmpfiles.org | 
+                © 2024 MyCatBox - Powered by Cloudinary | 
                 <a href="#" onclick="showAbout(); return false;">Tentang</a> | 
-                <a href="#" onclick="showFAQ(); return false;">FAQ</a> | 
+                <a href="#" onclick="showCloudinaryInfo(); return false;">Cloudinary Info</a> | 
                 <a href="#" onclick="testAPIConnection(); return false;">Test Koneksi</a>
             </p>
         </footer>
@@ -790,6 +893,9 @@
         let allFiles = [];
         let isUploading = false;
 
+        // Format file yang bisa ditransformasi (gambar)
+        const TRANSFORMABLE_FORMATS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff'];
+
         // ==================== TEST API CONNECTION ====================
         async function testAPIConnection() {
             try {
@@ -798,7 +904,7 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    showNotification('✅ Koneksi ke server berhasil!', 'success');
+                    showNotification('✅ Koneksi ke Cloudinary berhasil!', 'success');
                     console.log('Server info:', data);
                 } else {
                     showNotification('❌ Server merespon tapi ada error', 'error');
@@ -821,7 +927,7 @@
                         <span>📦 Total File: ${stats.totalFiles}</span>
                         <span>💾 Total Size: ${formatBytes(stats.totalSize)}</span>
                         <span>⬇️ Total Downloads: ${stats.totalDownloads}</span>
-                        <span>🔧 Services: ${Object.keys(stats.services || {}).length}</span>
+                        <span>📋 Formats: ${Object.keys(stats.formats || {}).length}</span>
                     `;
                 }
             } catch (error) {
@@ -864,7 +970,7 @@
             const filesList = document.getElementById('filesList');
             
             if (files.length === 0) {
-                filesList.innerHTML = '<div class="loading">📭 Belum ada file. Upload file pertama Anda!</div>';
+                filesList.innerHTML = '<div class="loading">📭 Belum ada file. Upload file pertama Anda ke Cloudinary!</div>';
                 return;
             }
 
@@ -872,42 +978,28 @@
             files.forEach(file => {
                 // Tentukan icon berdasarkan tipe file
                 let fileIcon = getFileIcon(file.name);
+                let isImage = isImageFile(file.name);
                 
                 // Format tanggal
                 const uploadDate = new Date(file.uploadDate);
                 const timeAgo = getTimeAgo(uploadDate);
                 
-                // Cek expiry
-                let expiryClass = '';
-                let expiryBadge = '';
-                if (file.expiry) {
-                    const expiryDate = new Date(file.expiry);
-                    const now = new Date();
-                    const diffMs = expiryDate - now;
-                    const diffMins = Math.round(diffMs / 60000);
-                    
-                    if (diffMins > 0 && diffMins < 10) {
-                        expiryClass = 'expiring';
-                        expiryBadge = `<span class="expiry-badge">⏰ ${diffMins} menit lagi</span>`;
-                    } else if (diffMins > 0) {
-                        expiryBadge = `<span class="expiry-badge">⏰ ${diffMins} menit</span>`;
-                    }
-                }
-                
                 html += `
-                    <div class="file-card ${expiryClass}">
+                    <div class="file-card">
+                        ${isImage ? `<img src="${file.url}" class="file-thumbnail" alt="${file.name}" onerror="this.style.display='none'">` : ''}
                         <div class="file-name" title="${escapeHtml(file.name)}">${fileIcon} ${escapeHtml(truncateText(file.name, 40))}</div>
                         <div class="file-meta">
                             <span>📦 ${formatBytes(file.size)}</span>
                             <span>⬇️ ${file.downloads}</span>
-                            <span>🔧 ${file.service || 'tmpfiles.org'}</span>
+                            <span class="cloudinary-badge">☁️ Cloudinary</span>
+                            <span>📋 ${file.format || 'file'}</span>
                             <span>📅 ${timeAgo}</span>
-                            ${expiryBadge}
                         </div>
                         <div class="file-actions">
                             <a href="${file.url}" target="_blank" class="file-btn download-btn" onclick="trackDownload('${file.id}')">Download</a>
                             <button class="file-btn info-btn" onclick="showFileInfo('${file.id}')">Info</button>
                             <button class="file-btn copy-btn" onclick="copyToClipboard('${file.url}')">Copy URL</button>
+                            ${isImage ? `<button class="file-btn transform-btn" onclick="showTransformModal('${file.publicId}', '${file.name}')">Transform</button>` : ''}
                         </div>
                     </div>
                 `;
@@ -934,6 +1026,12 @@
             if (archiveExt.includes(ext)) return '🗜️';
             if (codeExt.includes(ext)) return '💻';
             return '📁';
+        }
+
+        // ==================== CHECK IF IMAGE FILE ====================
+        function isImageFile(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(ext);
         }
 
         // ==================== TRUNCATE TEXT ====================
@@ -974,12 +1072,10 @@
             
             let html = '';
             
-            // Tombol Previous
             if (current > 1) {
                 html += `<button class="page-btn" onclick="changePage(${current - 1})">←</button>`;
             }
             
-            // Tombol nomor halaman
             const maxVisible = 5;
             let start = Math.max(1, current - Math.floor(maxVisible / 2));
             let end = Math.min(total, start + maxVisible - 1);
@@ -1006,7 +1102,6 @@
                 html += `<button class="page-btn" onclick="changePage(${total})">${total}</button>`;
             }
             
-            // Tombol Next
             if (current < total) {
                 html += `<button class="page-btn" onclick="changePage(${current + 1})">→</button>`;
             }
@@ -1071,41 +1166,26 @@
             const modal = document.createElement('div');
             modal.className = 'modal';
             
-            let expiryInfo = '';
-            if (file.expiry) {
-                const expiryDate = new Date(file.expiry);
-                const now = new Date();
-                const diffMs = expiryDate - now;
-                const diffMins = Math.round(diffMs / 60000);
-                
-                if (diffMins > 0) {
-                    expiryInfo = `<p><strong>⏰ Expires in:</strong> ${diffMins} menit (${expiryDate.toLocaleString('id-ID')})</p>`;
-                } else {
-                    expiryInfo = `<p><strong>⏰ Expired:</strong> File ini sudah kadaluarsa</p>`;
-                }
-            }
+            const isImage = file.format && TRANSFORMABLE_FORMATS.includes(file.format);
             
             modal.innerHTML = `
                 <div class="modal-content">
-                    <h3>📋 Detail File</h3>
+                    <h3>📋 Detail File (Cloudinary)</h3>
+                    ${isImage ? `<img src="${file.url}" class="modal-preview" alt="${file.name}">` : ''}
                     <p><strong>Nama:</strong> ${escapeHtml(file.name)}</p>
                     <p><strong>Ukuran:</strong> ${formatBytes(file.size)}</p>
-                    <p><strong>Tipe:</strong> ${file.mimeType || 'Unknown'}</p>
-                    <p><strong>Service:</strong> ${file.service || 'tmpfiles.org'}</p>
+                    <p><strong>Tipe:</strong> ${file.mimeType || file.format || 'Unknown'}</p>
+                    <p><strong>Service:</strong> ☁️ Cloudinary</p>
+                    <p><strong>Public ID:</strong> ${file.publicId || 'N/A'}</p>
                     <p><strong>Upload:</strong> ${new Date(file.uploadDate).toLocaleString('id-ID')}</p>
                     <p><strong>Downloads:</strong> ${file.downloads}</p>
-                    ${expiryInfo}
+                    ${file.width ? `<p><strong>Dimensi:</strong> ${file.width} x ${file.height}</p>` : ''}
                     <p><strong>URL:</strong></p>
                     <div class="modal-url">${file.url}</div>
-                    ${file.directUrl ? `
-                        <p><strong>Direct URL:</strong></p>
-                        <div class="modal-url">${file.directUrl}</div>
-                    ` : ''}
-                    <p><small>⚠️ File akan otomatis dihapus setelah 60 menit</small></p>
                     <div class="modal-actions">
                         <button class="modal-btn download" onclick="window.open('${file.url}')">Download</button>
                         <button class="modal-btn copy" onclick="copyToClipboard('${file.url}')">Copy URL</button>
-                        ${file.directUrl ? `<button class="modal-btn copy" onclick="copyToClipboard('${file.directUrl}')">Copy Direct</button>` : ''}
+                        ${isImage ? `<button class="modal-btn transform" onclick="showTransformModal('${file.publicId}', '${file.name}'); this.closest('.modal').remove();">Transform</button>` : ''}
                         <button class="modal-btn close" onclick="this.closest('.modal').remove()">Tutup</button>
                     </div>
                 </div>
@@ -1118,6 +1198,142 @@
             });
             
             document.body.appendChild(modal);
+        }
+
+        // ==================== SHOW TRANSFORM MODAL ====================
+        async function showTransformModal(publicId, fileName) {
+            const existingModal = document.querySelector('.modal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h3>🖼️ Transformasi Gambar</h3>
+                    <p>File: ${escapeHtml(fileName)}</p>
+                    <p>Public ID: ${publicId}</p>
+                    
+                    <div class="transform-panel">
+                        <div class="transform-row">
+                            <label>Width:</label>
+                            <input type="number" id="transformWidth" placeholder="px" min="1" max="2000">
+                        </div>
+                        <div class="transform-row">
+                            <label>Height:</label>
+                            <input type="number" id="transformHeight" placeholder="px" min="1" max="2000">
+                        </div>
+                        <div class="transform-row">
+                            <label>Crop:</label>
+                            <select id="transformCrop">
+                                <option value="scale">Scale</option>
+                                <option value="fit">Fit</option>
+                                <option value="fill">Fill</option>
+                                <option value="thumb">Thumbnail</option>
+                                <option value="crop">Crop</option>
+                            </select>
+                        </div>
+                        <div class="transform-row">
+                            <label>Gravity:</label>
+                            <select id="transformGravity">
+                                <option value="center">Center</option>
+                                <option value="face">Face</option>
+                                <option value="faces">Faces</option>
+                                <option value="north">North</option>
+                                <option value="south">South</option>
+                                <option value="east">East</option>
+                                <option value="west">West</option>
+                            </select>
+                        </div>
+                        <div class="transform-row">
+                            <label>Effect:</label>
+                            <select id="transformEffect">
+                                <option value="">None</option>
+                                <option value="grayscale">Grayscale</option>
+                                <option value="sepia">Sepia</option>
+                                <option value="negate">Negate</option>
+                                <option value="blur:300">Blur</option>
+                                <option value="sharpen">Sharpen</option>
+                                <option value="brightness:50">Brightness</option>
+                                <option value="contrast:50">Contrast</option>
+                            </select>
+                        </div>
+                        <div class="transform-row">
+                            <label>Quality:</label>
+                            <select id="transformQuality">
+                                <option value="">Auto</option>
+                                <option value="100">100%</option>
+                                <option value="80">80%</option>
+                                <option value="60">60%</option>
+                                <option value="40">40%</option>
+                            </select>
+                        </div>
+                        <button class="action-btn transform" onclick="applyTransform('${publicId}')" style="width: 100%; margin-top: 15px;">Terapkan Transformasi</button>
+                    </div>
+
+                    <div id="transformResult" style="margin-top: 20px; display: none;">
+                        <h4>Hasil Transformasi:</h4>
+                        <div class="transform-preview">
+                            <img id="transformedImage" src="" alt="Transformed">
+                        </div>
+                        <div class="url-box" style="margin-top: 10px;">
+                            <input type="text" id="transformedUrl" readonly>
+                            <button class="copy-btn" onclick="copyToClipboard(document.getElementById('transformedUrl').value)">Copy</button>
+                        </div>
+                    </div>
+
+                    <div class="modal-actions" style="margin-top: 20px;">
+                        <button class="modal-btn close" onclick="this.closest('.modal').remove()">Tutup</button>
+                    </div>
+                </div>
+            `;
+            
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+            
+            document.body.appendChild(modal);
+        }
+
+        // ==================== APPLY TRANSFORM ====================
+        async function applyTransform(publicId) {
+            const width = document.getElementById('transformWidth').value;
+            const height = document.getElementById('transformHeight').value;
+            const crop = document.getElementById('transformCrop').value;
+            const gravity = document.getElementById('transformGravity').value;
+            const effect = document.getElementById('transformEffect').value;
+            const quality = document.getElementById('transformQuality').value;
+
+            let params = new URLSearchParams();
+            if (width) params.append('width', width);
+            if (height) params.append('height', height);
+            if (crop) params.append('crop', crop);
+            if (gravity) params.append('gravity', gravity);
+            if (effect) params.append('effect', effect);
+            if (quality) params.append('quality', quality);
+
+            try {
+                showNotification('Menerapkan transformasi...', 'info');
+                
+                const response = await fetch(`/api/transform/${publicId}?${params.toString()}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('transformedImage').src = data.url;
+                    document.getElementById('transformedUrl').value = data.url;
+                    document.getElementById('transformResult').style.display = 'block';
+                    showNotification('✅ Transformasi berhasil!', 'success');
+                } else {
+                    showNotification('❌ Transformasi gagal', 'error');
+                }
+            } catch (error) {
+                console.error('Transform error:', error);
+                showNotification('Error transformasi', 'error');
+            }
         }
 
         // ==================== SHOW ABOUT MODAL ====================
@@ -1128,19 +1344,17 @@
             modal.innerHTML = `
                 <div class="modal-content">
                     <h3>🐱 Tentang MyCatBox</h3>
-                    <p>MyCatBox adalah layanan upload file gratis yang menggunakan <strong>tmpfiles.org</strong> sebagai storage utama.</p>
-                    <p><strong>Fitur:</strong></p>
+                    <p>MyCatBox adalah layanan upload file gratis yang menggunakan <strong>Cloudinary</strong> sebagai storage.</p>
+                    <p><strong>Fitur Cloudinary:</strong></p>
                     <ul style="margin-left: 20px; line-height: 1.8;">
-                        <li>Upload file hingga 100MB</li>
-                        <li>File otomatis dihapus setelah 60 menit</li>
-                        <li>Drag & drop support</li>
-                        <li>Multiple backup service (GoFile, tmp.ninja)</li>
-                        <li>Statistik realtime</li>
-                        <li>Pencarian file</li>
-                        <li>Dark mode support</li>
+                        <li>✅ Penyimpanan permanen</li>
+                        <li>✅ Semua format file didukung</li>
+                        <li>✅ Transformasi gambar (resize, crop, effect)</li>
+                        <li>✅ CDN global - akses cepat dari mana saja</li>
+                        <li>✅ Optimasi otomatis</li>
+                        <li>✅ Gratis 25GB storage</li>
                     </ul>
-                    <p><strong>Version:</strong> 2.0</p>
-                    <p><strong>API:</strong> tmpfiles.org</p>
+                    <p><strong>Version:</strong> 3.0 (Cloudinary)</p>
                     <div class="modal-actions">
                         <button class="modal-btn close" onclick="this.closest('.modal').remove()">Tutup</button>
                     </div>
@@ -1156,46 +1370,43 @@
             document.body.appendChild(modal);
         }
 
-        // ==================== SHOW FAQ MODAL ====================
-        function showFAQ() {
-            const modal = document.createElement('div');
-            modal.className = 'modal';
-            
-            modal.innerHTML = `
-                <div class="modal-content">
-                    <h3>❓ FAQ</h3>
+        // ==================== SHOW CLOUDINARY INFO ====================
+        async function showCloudinaryInfo() {
+            try {
+                const response = await fetch('/api/cloudinary/usage');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const usage = data.usage;
+                    const modal = document.createElement('div');
+                    modal.className = 'modal';
                     
-                    <p><strong>Q: Berapa maksimal ukuran file?</strong></p>
-                    <p>A: Maksimal 100MB per file.</p>
+                    modal.innerHTML = `
+                        <div class="modal-content">
+                            <h3>☁️ Cloudinary Info</h3>
+                            <p><strong>Plan:</strong> ${usage.plan || 'Free'}</p>
+                            <p><strong>Credits:</strong> ${usage.credits?.usage || 0} / ${usage.credits?.limit || 'Unlimited'}</p>
+                            <p><strong>Storage:</strong> ${formatBytes(usage.usage?.storage || 0)}</p>
+                            <p><strong>Bandwidth:</strong> ${formatBytes(usage.usage?.bandwidth || 0)}</p>
+                            <p><strong>Requests:</strong> ${usage.usage?.requests || 0}</p>
+                            <p><strong>Transformations:</strong> ${usage.usage?.transformations || 0}</p>
+                            <div class="modal-actions">
+                                <button class="modal-btn close" onclick="this.closest('.modal').remove()">Tutup</button>
+                            </div>
+                        </div>
+                    `;
                     
-                    <p><strong>Q: Berapa lama file disimpan?</strong></p>
-                    <p>A: File akan otomatis dihapus setelah 60 menit (mengikuti kebijakan tmpfiles.org).</p>
+                    modal.addEventListener('click', (e) => {
+                        if (e.target === modal) {
+                            modal.remove();
+                        }
+                    });
                     
-                    <p><strong>Q: Apakah file saya aman?</strong></p>
-                    <p>A: File Anda diupload ke tmpfiles.org. Kami tidak menyimpan file di server kami, hanya metadata.</p>
-                    
-                    <p><strong>Q: Apakah bisa upload banyak file sekaligus?</strong></p>
-                    <p>A: Saat ini hanya support 1 file per upload.</p>
-                    
-                    <p><strong>Q: File apa saja yang bisa diupload?</strong></p>
-                    <p>A: Semua jenis file didukung!</p>
-                    
-                    <p><strong>Q: Kok error terus?</strong></p>
-                    <p>A: Coba test koneksi dulu dengan klik "Test Koneksi" di footer. Pastikan server berjalan.</p>
-                    
-                    <div class="modal-actions">
-                        <button class="modal-btn close" onclick="this.closest('.modal').remove()">Tutup</button>
-                    </div>
-                </div>
-            `;
-            
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    modal.remove();
+                    document.body.appendChild(modal);
                 }
-            });
-            
-            document.body.appendChild(modal);
+            } catch (error) {
+                showNotification('Gagal memuat info Cloudinary', 'error');
+            }
         }
 
         // ==================== FORMAT BYTES ====================
@@ -1245,7 +1456,7 @@
             fileInfo.innerHTML = `
                 <strong>File:</strong> ${escapeHtml(file.name)}<br>
                 <strong>Size:</strong> ${formatBytes(file.size)}<br>
-                <strong>Status:</strong> Memulai upload ke tmpfiles.org...
+                <strong>Status:</strong> Mengupload ke Cloudinary...
             `;
 
             try {
@@ -1271,8 +1482,7 @@
                     isUploading = false;
                     
                     try {
-                        console.log('Response status:', xhr.status);
-                        console.log('Response text:', xhr.responseText);
+                        console.log('Response:', xhr.responseText);
                         
                         const data = JSON.parse(xhr.responseText);
                         
@@ -1285,7 +1495,6 @@
                                 fileInput.value = '';
                             } else {
                                 showError('Response tidak valid: URL tidak ditemukan');
-                                console.error('Invalid response:', data);
                             }
                         } else {
                             showError(data.error || 'Upload gagal dengan status: ' + xhr.status);
@@ -1296,8 +1505,7 @@
                     }
                 });
 
-                xhr.addEventListener('error', function(e) {
-                    console.error('Network error:', e);
+                xhr.addEventListener('error', function() {
                     progressBar.style.display = 'none';
                     uploadBtn.disabled = false;
                     dropZone.style.opacity = '1';
@@ -1334,41 +1542,25 @@
             const result = document.getElementById('result');
             result.className = 'result success';
             
-            let expiryMessage = '';
-            if (data.expiry) {
-                const expiryDate = new Date(data.expiry);
-                expiryMessage = `<p style="margin-top: 10px; font-size: 12px; color: #ff9800;">⏰ File akan otomatis dihapus pada ${expiryDate.toLocaleString('id-ID')}</p>`;
-            }
+            const isImage = data.format && TRANSFORMABLE_FORMATS.includes(data.format);
             
             result.innerHTML = `
-                <h3>✅ Upload Berhasil!</h3>
-                <p>${data.message || 'File Anda telah diupload menggunakan ' + data.service}</p>
+                <h3>✅ Upload Berhasil ke Cloudinary!</h3>
+                <p>${data.message || 'File tersimpan permanen di Cloudinary'}</p>
                 <div class="url-box">
                     <input type="text" value="${data.url}" readonly id="successUrl">
                     <button class="copy-btn" onclick="copyToClipboard(document.getElementById('successUrl').value)">Copy</button>
                 </div>
-                ${data.directUrl ? `
-                <div class="url-box" style="margin-top: 10px;">
-                    <input type="text" value="${data.directUrl}" readonly id="directUrl">
-                    <button class="copy-btn" onclick="copyToClipboard(document.getElementById('directUrl').value)">Copy Direct</button>
-                </div>
-                ` : ''}
                 <div class="action-buttons">
                     <button class="action-btn open" onclick="window.open('${data.url}')">Buka URL</button>
-                    <button class="action-btn download" onclick="downloadFile('${data.url}', '${data.fileName || 'download'}')">Download File</button>
+                    <button class="action-btn download" onclick="downloadFile('${data.url}', '${data.fileName || 'download'}')">Download</button>
+                    ${isImage ? `<button class="action-btn transform" onclick="showTransformModal('${data.publicId}', '${data.fileName}')">Transform</button>` : ''}
                 </div>
                 <p style="margin-top: 15px; font-size: 12px; color: #666;">
-                    ID: ${data.fileId || 'N/A'} | Service: ${data.service || 'tmpfiles.org'} | Size: ${formatBytes(data.fileSize || 0)}
+                    Public ID: ${data.publicId || 'N/A'} | Format: ${data.format || 'file'} | Size: ${formatBytes(data.fileSize || 0)}
                 </p>
-                ${expiryMessage}
             `;
             result.style.display = 'block';
-            
-            setTimeout(() => {
-                if (result.style.display === 'block') {
-                    result.style.opacity = '0.5';
-                }
-            }, 60000);
         }
 
         // ==================== SHOW ERROR ====================
@@ -1507,7 +1699,7 @@
                 <strong>File:</strong> ${escapeHtml(fileName)}<br>
                 <strong>Size:</strong> ${formatBytes(file.size)}<br>
                 <strong>Tipe:</strong> ${fileType}<br>
-                <strong>Status:</strong> Siap upload ke tmpfiles.org
+                <strong>Status:</strong> Siap upload ke Cloudinary
             `;
             
             uploadFile(file);
