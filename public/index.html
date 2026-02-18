@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyCatBox - File Upload Service Gratis</title>
+    <title>MyCatBox - File Upload Service (tmpfiles.org)</title>
     <style>
         * {
             margin: 0;
@@ -119,9 +119,10 @@
             color: #666;
             font-size: 14px;
             margin-top: 10px;
-            padding: 10px;
+            padding: 15px;
             background: #f5f5f5;
             border-radius: 5px;
+            text-align: left;
         }
 
         .progress-bar {
@@ -139,6 +140,22 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             width: 0%;
             transition: width 0.3s;
+        }
+
+        /* Info Box */
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        .info-box.warning {
+            background: #fff3e0;
+            border-left-color: #ff9800;
         }
 
         /* Result Box */
@@ -291,6 +308,10 @@
             border-color: #764ba2;
         }
 
+        .file-card.expiring {
+            border-left: 3px solid #ff9800;
+        }
+
         .file-card::before {
             content: '';
             position: absolute;
@@ -330,6 +351,11 @@
             border-radius: 12px;
             margin-right: 5px;
             margin-bottom: 5px;
+        }
+
+        .file-meta .expiry-badge {
+            background: #ff9800;
+            color: white;
         }
 
         .file-actions {
@@ -589,6 +615,7 @@
             color: white;
             text-decoration: none;
             border-bottom: 1px dotted white;
+            margin: 0 10px;
         }
 
         footer a:hover {
@@ -699,14 +726,19 @@
             .url-box input {
                 color: white;
             }
+
+            .info-box {
+                background: #1e3a5f;
+                color: #fff;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🐱 MyCatBox <span>v2.0</span></h1>
-            <p>Upload dan bagikan file Anda dengan mudah dan gratis! Support file hingga 100MB</p>
+            <h1>🐱 MyCatBox <span>tmpfiles.org</span></h1>
+            <p>Upload dan bagikan file Anda dengan mudah! File otomatis dihapus setelah 60 menit.</p>
             <div class="stats" id="stats">
                 <span>📊 Loading stats...</span>
             </div>
@@ -722,9 +754,9 @@
             <div class="progress-bar" id="progressBar">
                 <div class="progress-fill" id="progressFill"></div>
             </div>
-            <p style="color: #999; font-size: 12px; margin-top: 10px;">
-                Maksimal 100MB | Support: Gambar, Video, Dokumen, dll
-            </p>
+            <div class="info-box warning">
+                <strong>⏰ Informasi:</strong> File akan otomatis dihapus setelah 60 menit. Maksimal ukuran file 100MB.
+            </div>
         </div>
 
         <div class="result" id="result"></div>
@@ -741,7 +773,12 @@
         </div>
 
         <footer>
-            <p>© 2024 MyCatBox - Gratis File Upload Service | <a href="#" onclick="showAbout(); return false;">Tentang</a> | <a href="#" onclick="showFAQ(); return false;">FAQ</a> | <a href="#" onclick="testAPIConnection(); return false;">Test Koneksi</a></p>
+            <p>
+                © 2024 MyCatBox - Powered by tmpfiles.org | 
+                <a href="#" onclick="showAbout(); return false;">Tentang</a> | 
+                <a href="#" onclick="showFAQ(); return false;">FAQ</a> | 
+                <a href="#" onclick="testAPIConnection(); return false;">Test Koneksi</a>
+            </p>
         </footer>
     </div>
 
@@ -840,14 +877,32 @@
                 const uploadDate = new Date(file.uploadDate);
                 const timeAgo = getTimeAgo(uploadDate);
                 
+                // Cek expiry
+                let expiryClass = '';
+                let expiryBadge = '';
+                if (file.expiry) {
+                    const expiryDate = new Date(file.expiry);
+                    const now = new Date();
+                    const diffMs = expiryDate - now;
+                    const diffMins = Math.round(diffMs / 60000);
+                    
+                    if (diffMins > 0 && diffMins < 10) {
+                        expiryClass = 'expiring';
+                        expiryBadge = `<span class="expiry-badge">⏰ ${diffMins} menit lagi</span>`;
+                    } else if (diffMins > 0) {
+                        expiryBadge = `<span class="expiry-badge">⏰ ${diffMins} menit</span>`;
+                    }
+                }
+                
                 html += `
-                    <div class="file-card">
+                    <div class="file-card ${expiryClass}">
                         <div class="file-name" title="${escapeHtml(file.name)}">${fileIcon} ${escapeHtml(truncateText(file.name, 40))}</div>
                         <div class="file-meta">
                             <span>📦 ${formatBytes(file.size)}</span>
                             <span>⬇️ ${file.downloads}</span>
-                            <span>🔧 ${file.service || 'unknown'}</span>
+                            <span>🔧 ${file.service || 'tmpfiles.org'}</span>
                             <span>📅 ${timeAgo}</span>
+                            ${expiryBadge}
                         </div>
                         <div class="file-actions">
                             <a href="${file.url}" target="_blank" class="file-btn download-btn" onclick="trackDownload('${file.id}')">Download</a>
@@ -965,7 +1020,6 @@
             currentPage = page;
             const search = document.getElementById('searchBox').value;
             loadFiles(page, search);
-            // Scroll ke atas dengan smooth
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
@@ -974,7 +1028,6 @@
             try {
                 await fetch(`/api/files/${fileId}/download`, { method: 'POST' });
                 loadStats();
-                // Update local stats
                 const file = allFiles.find(f => f.id === fileId);
                 if (file) {
                     file.downloads++;
@@ -987,10 +1040,8 @@
         // ==================== SHOW FILE INFO ====================
         async function showFileInfo(fileId) {
             try {
-                // Cari di local files dulu
                 let file = allFiles.find(f => f.id === fileId);
                 
-                // Jika tidak ada, fetch dari API
                 if (!file) {
                     const response = await fetch(`/api/files/${fileId}`);
                     const data = await response.json();
@@ -1012,7 +1063,6 @@
 
         // ==================== SHOW FILE MODAL ====================
         function showFileModal(file) {
-            // Remove existing modal
             const existingModal = document.querySelector('.modal');
             if (existingModal) {
                 existingModal.remove();
@@ -1021,27 +1071,46 @@
             const modal = document.createElement('div');
             modal.className = 'modal';
             
+            let expiryInfo = '';
+            if (file.expiry) {
+                const expiryDate = new Date(file.expiry);
+                const now = new Date();
+                const diffMs = expiryDate - now;
+                const diffMins = Math.round(diffMs / 60000);
+                
+                if (diffMins > 0) {
+                    expiryInfo = `<p><strong>⏰ Expires in:</strong> ${diffMins} menit (${expiryDate.toLocaleString('id-ID')})</p>`;
+                } else {
+                    expiryInfo = `<p><strong>⏰ Expired:</strong> File ini sudah kadaluarsa</p>`;
+                }
+            }
+            
             modal.innerHTML = `
                 <div class="modal-content">
                     <h3>📋 Detail File</h3>
                     <p><strong>Nama:</strong> ${escapeHtml(file.name)}</p>
                     <p><strong>Ukuran:</strong> ${formatBytes(file.size)}</p>
                     <p><strong>Tipe:</strong> ${file.mimeType || 'Unknown'}</p>
-                    <p><strong>Service:</strong> ${file.service || 'Unknown'}</p>
+                    <p><strong>Service:</strong> ${file.service || 'tmpfiles.org'}</p>
                     <p><strong>Upload:</strong> ${new Date(file.uploadDate).toLocaleString('id-ID')}</p>
                     <p><strong>Downloads:</strong> ${file.downloads}</p>
-                    ${file.expiry ? `<p><strong>Expires:</strong> ${new Date(file.expiry).toLocaleString('id-ID')}</p>` : ''}
+                    ${expiryInfo}
                     <p><strong>URL:</strong></p>
                     <div class="modal-url">${file.url}</div>
+                    ${file.directUrl ? `
+                        <p><strong>Direct URL:</strong></p>
+                        <div class="modal-url">${file.directUrl}</div>
+                    ` : ''}
+                    <p><small>⚠️ File akan otomatis dihapus setelah 60 menit</small></p>
                     <div class="modal-actions">
                         <button class="modal-btn download" onclick="window.open('${file.url}')">Download</button>
                         <button class="modal-btn copy" onclick="copyToClipboard('${file.url}')">Copy URL</button>
+                        ${file.directUrl ? `<button class="modal-btn copy" onclick="copyToClipboard('${file.directUrl}')">Copy Direct</button>` : ''}
                         <button class="modal-btn close" onclick="this.closest('.modal').remove()">Tutup</button>
                     </div>
                 </div>
             `;
             
-            // Close modal when clicking outside
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
                     modal.remove();
@@ -1059,18 +1128,19 @@
             modal.innerHTML = `
                 <div class="modal-content">
                     <h3>🐱 Tentang MyCatBox</h3>
-                    <p>MyCatBox adalah layanan upload file gratis yang terinspirasi dari Catbox.moe.</p>
+                    <p>MyCatBox adalah layanan upload file gratis yang menggunakan <strong>tmpfiles.org</strong> sebagai storage utama.</p>
                     <p><strong>Fitur:</strong></p>
                     <ul style="margin-left: 20px; line-height: 1.8;">
                         <li>Upload file hingga 100MB</li>
+                        <li>File otomatis dihapus setelah 60 menit</li>
                         <li>Drag & drop support</li>
-                        <li>Multiple storage service (file.io, GoFile, tmp.ninja, anonfiles)</li>
+                        <li>Multiple backup service (GoFile, tmp.ninja)</li>
                         <li>Statistik realtime</li>
                         <li>Pencarian file</li>
                         <li>Dark mode support</li>
                     </ul>
                     <p><strong>Version:</strong> 2.0</p>
-                    <p><strong>Dibuat dengan:</strong> Express.js, Multer, Axios</p>
+                    <p><strong>API:</strong> tmpfiles.org</p>
                     <div class="modal-actions">
                         <button class="modal-btn close" onclick="this.closest('.modal').remove()">Tutup</button>
                     </div>
@@ -1098,11 +1168,11 @@
                     <p><strong>Q: Berapa maksimal ukuran file?</strong></p>
                     <p>A: Maksimal 100MB per file.</p>
                     
-                    <p><strong>Q: Apakah file saya aman?</strong></p>
-                    <p>A: File Anda diupload ke service pihak ketiga (file.io, GoFile, tmp.ninja, anonfiles). Kami tidak menyimpan file di server kami.</p>
-                    
                     <p><strong>Q: Berapa lama file disimpan?</strong></p>
-                    <p>A: Tergantung service yang digunakan. file.io: 14 hari atau 1 download. GoFile: selama ada aktivitas. tmp.ninja: 30 hari. anonfiles: 30 hari.</p>
+                    <p>A: File akan otomatis dihapus setelah 60 menit (mengikuti kebijakan tmpfiles.org).</p>
+                    
+                    <p><strong>Q: Apakah file saya aman?</strong></p>
+                    <p>A: File Anda diupload ke tmpfiles.org. Kami tidak menyimpan file di server kami, hanya metadata.</p>
                     
                     <p><strong>Q: Apakah bisa upload banyak file sekaligus?</strong></p>
                     <p>A: Saat ini hanya support 1 file per upload.</p>
@@ -1175,7 +1245,7 @@
             fileInfo.innerHTML = `
                 <strong>File:</strong> ${escapeHtml(file.name)}<br>
                 <strong>Size:</strong> ${formatBytes(file.size)}<br>
-                <strong>Status:</strong> Memulai upload...
+                <strong>Status:</strong> Memulai upload ke tmpfiles.org...
             `;
 
             try {
@@ -1207,13 +1277,12 @@
                         const data = JSON.parse(xhr.responseText);
                         
                         if (xhr.status === 200 && data.success) {
-                            // Pastikan URL ada
                             if (data.url) {
                                 showSuccess(data);
                                 loadFiles(currentPage);
                                 loadStats();
-                                fileInfo.innerHTML = ''; // Clear file info
-                                fileInput.value = ''; // Reset file input
+                                fileInfo.innerHTML = '';
+                                fileInput.value = '';
                             } else {
                                 showError('Response tidak valid: URL tidak ditemukan');
                                 console.error('Invalid response:', data);
@@ -1246,7 +1315,7 @@
                     fileInfo.innerHTML = '';
                 });
 
-                xhr.timeout = 300000; // 5 menit timeout
+                xhr.timeout = 300000;
                 xhr.open('POST', '/api/upload');
                 xhr.send(formData);
             } catch (error) {
@@ -1264,6 +1333,13 @@
         function showSuccess(data) {
             const result = document.getElementById('result');
             result.className = 'result success';
+            
+            let expiryMessage = '';
+            if (data.expiry) {
+                const expiryDate = new Date(data.expiry);
+                expiryMessage = `<p style="margin-top: 10px; font-size: 12px; color: #ff9800;">⏰ File akan otomatis dihapus pada ${expiryDate.toLocaleString('id-ID')}</p>`;
+            }
+            
             result.innerHTML = `
                 <h3>✅ Upload Berhasil!</h3>
                 <p>${data.message || 'File Anda telah diupload menggunakan ' + data.service}</p>
@@ -1271,17 +1347,23 @@
                     <input type="text" value="${data.url}" readonly id="successUrl">
                     <button class="copy-btn" onclick="copyToClipboard(document.getElementById('successUrl').value)">Copy</button>
                 </div>
+                ${data.directUrl ? `
+                <div class="url-box" style="margin-top: 10px;">
+                    <input type="text" value="${data.directUrl}" readonly id="directUrl">
+                    <button class="copy-btn" onclick="copyToClipboard(document.getElementById('directUrl').value)">Copy Direct</button>
+                </div>
+                ` : ''}
                 <div class="action-buttons">
                     <button class="action-btn open" onclick="window.open('${data.url}')">Buka URL</button>
                     <button class="action-btn download" onclick="downloadFile('${data.url}', '${data.fileName || 'download'}')">Download File</button>
                 </div>
                 <p style="margin-top: 15px; font-size: 12px; color: #666;">
-                    ID: ${data.fileId || 'N/A'} | Service: ${data.service || 'N/A'} | Size: ${formatBytes(data.fileSize || 0)}
+                    ID: ${data.fileId || 'N/A'} | Service: ${data.service || 'tmpfiles.org'} | Size: ${formatBytes(data.fileSize || 0)}
                 </p>
+                ${expiryMessage}
             `;
             result.style.display = 'block';
             
-            // Auto hide after 1 minute
             setTimeout(() => {
                 if (result.style.display === 'block') {
                     result.style.opacity = '0.5';
@@ -1321,7 +1403,6 @@
             navigator.clipboard.writeText(text).then(() => {
                 showNotification('✓ URL berhasil dicopy!');
             }).catch(() => {
-                // Fallback
                 const textarea = document.createElement('textarea');
                 textarea.value = text;
                 document.body.appendChild(textarea);
@@ -1360,7 +1441,6 @@
         const fileInput = document.getElementById('fileInput');
         const uploadBtn = document.getElementById('uploadBtn');
 
-        // Prevent default drag behaviors
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             dropZone.addEventListener(eventName, preventDefaults, false);
             document.body.addEventListener(eventName, preventDefaults, false);
@@ -1371,7 +1451,6 @@
             e.stopPropagation();
         }
 
-        // Highlight drop zone
         ['dragenter', 'dragover'].forEach(eventName => {
             dropZone.addEventListener(eventName, highlight, false);
         });
@@ -1388,7 +1467,6 @@
             dropZone.classList.remove('dragover');
         }
 
-        // Handle drop
         dropZone.addEventListener('drop', handleDrop, false);
 
         function handleDrop(e) {
@@ -1400,7 +1478,6 @@
             }
         }
 
-        // Handle file select
         uploadBtn.addEventListener('click', () => {
             if (!isUploading) {
                 fileInput.click();
@@ -1416,16 +1493,13 @@
             }
         });
 
-        // Handle file
         function handleFile(file) {
-            // Validasi ukuran file (100MB max)
             if (file.size > 100 * 1024 * 1024) {
                 showError('File terlalu besar! Maksimal 100MB');
-                fileInput.value = ''; // Reset input
+                fileInput.value = '';
                 return;
             }
             
-            // Validasi tipe file (optional)
             const fileType = file.type || 'Unknown';
             const fileName = file.name;
             
@@ -1433,7 +1507,7 @@
                 <strong>File:</strong> ${escapeHtml(fileName)}<br>
                 <strong>Size:</strong> ${formatBytes(file.size)}<br>
                 <strong>Tipe:</strong> ${fileType}<br>
-                <strong>Status:</strong> Siap upload
+                <strong>Status:</strong> Siap upload ke tmpfiles.org
             `;
             
             uploadFile(file);
@@ -1453,13 +1527,11 @@
 
         // ==================== KEYBOARD SHORTCUTS ====================
         document.addEventListener('keydown', (e) => {
-            // Ctrl/Cmd + K untuk focus ke search
             if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
                 e.preventDefault();
                 document.getElementById('searchBox').focus();
             }
             
-            // Escape untuk close modal
             if (e.key === 'Escape') {
                 const modal = document.querySelector('.modal');
                 if (modal) {
@@ -1470,7 +1542,6 @@
 
         // ==================== INITIAL LOAD ====================
         window.addEventListener('load', () => {
-            // Test koneksi dulu
             setTimeout(() => {
                 testAPIConnection();
             }, 500);
@@ -1482,7 +1553,7 @@
         // ==================== AUTO REFRESH ====================
         setInterval(() => {
             loadStats();
-            if (!document.hidden) { // Only refresh if tab is active
+            if (!document.hidden) {
                 loadFiles(currentPage, document.getElementById('searchBox').value);
             }
         }, 30000);
@@ -1494,47 +1565,6 @@
                 loadFiles(currentPage, document.getElementById('searchBox').value);
             }
         });
-
-        // ==================== ADD SMOOTH SCROLLING ====================
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                e.preventDefault();
-                document.querySelector(this.getAttribute('href')).scrollIntoView({
-                    behavior: 'smooth'
-                });
-            });
-        });
-
-        // ==================== ADD ANIMATION ON SCROLL ====================
-        const observerOptions = {
-            threshold: 0.1
-        };
-
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.style.opacity = '1';
-                    entry.target.style.transform = 'translateY(0)';
-                }
-            });
-        }, observerOptions);
-
-        // Observe file cards after they're loaded
-        function observeFileCards() {
-            document.querySelectorAll('.file-card').forEach(card => {
-                card.style.opacity = '0';
-                card.style.transform = 'translateY(20px)';
-                card.style.transition = 'all 0.5s';
-                observer.observe(card);
-            });
-        }
-
-        // Override displayFiles to observe new cards
-        const originalDisplayFiles = displayFiles;
-        displayFiles = function(files) {
-            originalDisplayFiles(files);
-            setTimeout(observeFileCards, 100);
-        };
     </script>
 </body>
 </html>
